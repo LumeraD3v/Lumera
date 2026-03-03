@@ -47,6 +47,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalTextInputService
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
@@ -163,7 +164,7 @@ fun SearchScreen(
                     onOpenSystemKeyboard = {
                         keepFocused = true
                         searchInputFocusRequester.requestFocus()
-                        keyboardController?.show()
+                        try { keyboardController?.show() } catch (_: Exception) { }
                     },
                     entryRequester = entryRequester,
                     drawerRequester = drawerRequester,
@@ -468,59 +469,65 @@ fun SearchScreen(
                         )
                         Spacer(modifier = Modifier.width(16.dp))
 
-                        BasicTextField(
-                            value = state.query,
-                            onValueChange = { viewModel.onQueryChange(it) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusProperties { canFocus = keepFocused }
-                                .focusRequester(searchInputFocusRequester)
-                                .onFocusChanged { if (!it.isFocused) keepFocused = false }
-                                .onPreviewKeyEvent {
-                                    if (it.type == KeyEventType.KeyDown) {
-                                        when (it.key) {
-                                            Key.DirectionLeft -> {
-                                                entryRequester.requestFocus()
-                                                true
-                                            }
-                                            Key.DirectionUp -> {
-                                                if (isTopNav) {
-                                                    drawerRequester.requestFocus()
+                        // Suppress automatic IME connection — Android TV may not have
+                        // a system keyboard, which can crash the app. The custom
+                        // on-screen keyboard handles input; the system keyboard is
+                        // only shown explicitly via the keyboard button.
+                        CompositionLocalProvider(LocalTextInputService provides null) {
+                            BasicTextField(
+                                value = state.query,
+                                onValueChange = { viewModel.onQueryChange(it) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusProperties { canFocus = keepFocused }
+                                    .focusRequester(searchInputFocusRequester)
+                                    .onFocusChanged { if (!it.isFocused) keepFocused = false }
+                                    .onPreviewKeyEvent {
+                                        if (it.type == KeyEventType.KeyDown) {
+                                            when (it.key) {
+                                                Key.DirectionLeft -> {
+                                                    entryRequester.requestFocus()
+                                                    true
                                                 }
-                                                true
+                                                Key.DirectionUp -> {
+                                                    if (isTopNav) {
+                                                        drawerRequester.requestFocus()
+                                                    }
+                                                    true
+                                                }
+                                                else -> false
                                             }
-                                            else -> false
-                                        }
-                                    } else false
-                                },
-                            textStyle = MaterialTheme.typography.headlineMedium.copy(
-                                color = Color.White,
-                                fontWeight = FontWeight.Normal
-                            ),
-                            cursorBrush = SolidColor(Color.White),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(
-                                onSearch = {
-                                    keepFocused = false
-                                    keyboardController?.hide()
-                                }
-                            ),
-                            decorationBox = { innerTextField ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (state.query.isEmpty()) {
-                                        Text(
-                                            text = "Type to search...",
-                                            style = MaterialTheme.typography.headlineMedium.copy(
-                                                fontSize = 20.sp,
-                                                fontWeight = FontWeight.Normal
-                                            ),
-                                            color = Color.White.copy(alpha = 0.5f)
-                                        )
+                                        } else false
+                                    },
+                                textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Normal
+                                ),
+                                cursorBrush = SolidColor(Color.White),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(
+                                    onSearch = {
+                                        keepFocused = false
+                                        keyboardController?.hide()
                                     }
-                                    innerTextField()
+                                ),
+                                decorationBox = { innerTextField ->
+                                    Box(contentAlignment = Alignment.CenterStart) {
+                                        if (state.query.isEmpty()) {
+                                            Text(
+                                                text = "Type to search...",
+                                                style = MaterialTheme.typography.headlineMedium.copy(
+                                                    fontSize = 20.sp,
+                                                    fontWeight = FontWeight.Normal
+                                                ),
+                                                color = Color.White.copy(alpha = 0.5f)
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }

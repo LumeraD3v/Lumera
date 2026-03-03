@@ -221,6 +221,12 @@ class ExoPlayerBackend(
         override fun onPlayerError(error: PlaybackException) {
             if (retryFromStartAfter416(error)) return
             if (attemptAutoRetryFromIoError(error)) return
+            // Parsing errors near the end of a stream are common with some sources.
+            // Treat them as playback completion instead of showing an error.
+            if (isParsingErrorNearEnd(error)) {
+                _uiState.update { it.copy(isEnded = true, isBuffering = false) }
+                return
+            }
             _uiState.update {
                 it.copy(
                     errorMessage = error.errorCodeName.ifBlank { error.message ?: "Playback error" },
@@ -997,6 +1003,17 @@ class ExoPlayerBackend(
             )
         }
         return true
+    }
+
+    private fun isParsingErrorNearEnd(error: PlaybackException): Boolean {
+        val codeName = error.errorCodeName.uppercase(Locale.US)
+        if (!codeName.contains("PARSING")) return false
+        val player = exoPlayer ?: return false
+        val duration = player.duration
+        val position = player.currentPosition
+        if (duration <= 0) return false
+        val ratio = position.toDouble() / duration.toDouble()
+        return ratio >= 0.90
     }
 
     private fun isAudioTrackError(error: PlaybackException): Boolean {
