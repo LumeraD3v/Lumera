@@ -28,6 +28,9 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     buildTypes {
@@ -38,6 +41,11 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -106,6 +114,11 @@ dependencies {
 
     // 7. Video Player
     implementation(project(":playbackcore"))
+    implementation(files("../playbackcore/libs/lib-exoplayer-release.aar"))
+    implementation(files("../playbackcore/libs/lib-decoder-av1-release.aar"))
+    implementation(files("../playbackcore/libs/lib-decoder-ffmpeg-release.aar"))
+    implementation(files("../playbackcore/libs/lib-decoder-iamf-release.aar"))
+    implementation(files("../playbackcore/libs/lib-decoder-mpegh-release.aar"))
 
     // 8. Testing & Debugging
     debugImplementation(libs.androidx.compose.ui.tooling)

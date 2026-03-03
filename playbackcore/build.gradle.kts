@@ -36,7 +36,6 @@ dependencies {
     api("androidx.media3:media3-datasource:$media3Version")
     api("androidx.media3:media3-datasource-okhttp:$media3Version")
     api("androidx.media3:media3-decoder:$media3Version")
-    api(files("libs/lib-exoplayer-release.aar"))
     api("androidx.media3:media3-exoplayer-dash:$media3Version") {
         exclude(group = "androidx.media3", module = "media3-exoplayer")
     }
@@ -52,9 +51,4 @@ dependencies {
     api("androidx.media3:media3-extractor:$media3Version")
     api("androidx.media3:media3-session:$media3Version")
     api("androidx.media3:media3-ui:$media3Version")
-
-    implementation(files("libs/lib-decoder-av1-release.aar"))
-    implementation(files("libs/lib-decoder-ffmpeg-release.aar"))
-    implementation(files("libs/lib-decoder-iamf-release.aar"))
-    implementation(files("libs/lib-decoder-mpegh-release.aar"))
 }
