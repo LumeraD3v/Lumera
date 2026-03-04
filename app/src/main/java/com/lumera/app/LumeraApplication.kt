@@ -25,7 +25,6 @@ class LumeraApplication : Application(), ImageLoaderFactory {
         super.attachBaseContext(base)
 
         initAcra {
-            buildConfigClass = BuildConfig::class.java
             reportFormat = StringFormat.JSON
 
             httpSender {

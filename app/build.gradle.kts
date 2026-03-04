@@ -27,8 +27,8 @@ android {
         applicationId = "com.lumera.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.1.2-beta"
+        versionCode = 4
+        versionName = "0.1.3-beta"
 
         // GitHub repository for auto-update system
         buildConfigField("String", "GITHUB_OWNER", "\"LumeraD3v\"")
