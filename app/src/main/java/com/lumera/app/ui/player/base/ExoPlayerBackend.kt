@@ -1009,11 +1009,11 @@ class ExoPlayerBackend(
         val codeName = error.errorCodeName.uppercase(Locale.US)
         if (!codeName.contains("PARSING")) return false
         val player = exoPlayer ?: return false
-        val duration = player.duration
-        val position = player.currentPosition
+        val duration = player.duration.takeIf { it > 0 } ?: _uiState.value.durationMs
+        val position = player.currentPosition.takeIf { it > 0 } ?: _uiState.value.positionMs
         if (duration <= 0) return false
         val ratio = position.toDouble() / duration.toDouble()
-        return ratio >= 0.90
+        return ratio >= 0.80
     }
 
     private fun isAudioTrackError(error: PlaybackException): Boolean {
