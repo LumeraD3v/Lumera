@@ -10,9 +10,9 @@ data class MetaResponse(
 
 @Immutable
 data class MetaItem(
-    val id: String,
-    val type: String, // "movie", "series"
-    val name: String,
+    val id: String = "",
+    val type: String = "", // "movie", "series"
+    val name: String = "",
     val poster: String? = null,
     val background: String? = null,
     val logo: String? = null,

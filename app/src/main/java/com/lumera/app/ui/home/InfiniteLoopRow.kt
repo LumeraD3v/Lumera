@@ -351,7 +351,7 @@ private fun LinearContent(
     ) {
         itemsIndexed(
             items = items,
-            key = { _, item -> "${rowIndex}_${item.id}" },
+            key = { index, item -> "${rowIndex}_${item.id}_$index" },
             contentType = { _, _ -> if (isLandscapeCards) "landscape" else "movie" }
         ) { index, item ->
             val isFirstItem = index == 0
@@ -789,9 +789,9 @@ private fun FiniteGridContent(
     ) {
         itemsIndexed(
             items = dataList,
-            key = { _, item ->
+            key = { index, item ->
                 when (item) {
-                    is GridRowItem.MovieItem -> "${rowIndex}_${item.movie.id}"
+                    is GridRowItem.MovieItem -> "${rowIndex}_${item.movie.id}_$index"
                     is GridRowItem.ViewMoreItem -> "${rowIndex}_viewmore"
                 }
             },

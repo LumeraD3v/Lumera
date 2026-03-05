@@ -244,7 +244,7 @@ fun GridViewScreen(
             ) {
                 itemsIndexed(
                     items = items,
-                    key = { _, item -> item.id }
+                    key = { index, item -> "${item.id}_$index" }
                 ) { index, item ->
                     
                     val shouldRequestFocus = if (lastFocusedIndex != null) {

@@ -28,6 +28,12 @@ class AddonRepository @Inject constructor(
 ) {
     private val gson = Gson()
     private val MAX_CATALOG_PAGES = 30
+
+    /** Filter out MetaItems where Gson injected null into non-null Kotlin fields */
+    private fun List<MetaItem>.sanitize(): List<MetaItem> = filter { item ->
+        @Suppress("SENSELESS_COMPARISON")
+        item.id != null && item.name != null && item.type != null
+    }
     private val CATALOG_TIMEOUT_MS = 10_000L // 10 seconds per catalog request
     private val STREAM_TIMEOUT_MS = 20_000L  // 20 seconds per stream request (torrent addons need more time)
 
@@ -40,7 +46,7 @@ class AddonRepository @Inject constructor(
             val url = if (skip == 0) baseUrl else {
                 baseUrl.replace(".json", "/skip=$skip.json")
             }
-            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty()
+            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty().sanitize()
         } catch (e: Exception) { emptyList() }
     }
 
@@ -52,7 +58,7 @@ class AddonRepository @Inject constructor(
             try {
                 withTimeout(CATALOG_TIMEOUT_MS) {
                     api.getCatalog("https://v3-cinemeta.strem.io/catalog/movie/top/search=$query.json")
-                }.metas.orEmpty()
+                }.metas.orEmpty().sanitize()
             } catch (e: Exception) { emptyList() }
         }
 
@@ -60,7 +66,7 @@ class AddonRepository @Inject constructor(
             try {
                 withTimeout(CATALOG_TIMEOUT_MS) {
                     api.getCatalog("https://v3-cinemeta.strem.io/catalog/series/top/search=$query.json")
-                }.metas.orEmpty()
+                }.metas.orEmpty().sanitize()
             } catch (e: Exception) { emptyList() }
         }
 
@@ -83,8 +89,8 @@ class AddonRepository @Inject constructor(
         val addonName: String,
         val type: String,
         val catalogId: String,
-        val catalogName: String,
-        val genres: List<String>,
+        val catalogName: String = "",
+        val genres: List<String> = emptyList(),
         val supportsSkip: Boolean = false
     )
 
@@ -98,6 +104,10 @@ class AddonRepository @Inject constructor(
             } catch (e: Exception) { continue }
 
             for (catalog in catalogs) {
+                // Skip catalogs with null fields injected by Gson
+                @Suppress("SENSELESS_COMPARISON")
+                if (catalog.name == null || catalog.id == null || catalog.type == null) continue
+
                 // Exclude search-only catalogs (required search extra)
                 val hasRequiredSearch = catalog.extra?.any { it.name == "search" && it.isRequired } ?: false
                 if (hasRequiredSearch) continue
@@ -141,7 +151,7 @@ class AddonRepository @Inject constructor(
         }
 
         try {
-            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty()
+            withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty().sanitize()
         } catch (e: Exception) { emptyList() }
     }
 
@@ -183,7 +193,7 @@ class AddonRepository @Inject constructor(
                 try {
                     val url = "${config.transportUrl}/catalog/${config.catalogType}/${config.catalogId}.json"
                     // Fetch only the first page for fast initial load
-                    val metas = try { withTimeout(catalogTimeoutMs) { api.getCatalog(url) }.metas.orEmpty() } catch (e: Exception) { emptyList() }
+                    val metas = try { withTimeout(catalogTimeoutMs) { api.getCatalog(url) }.metas.orEmpty().sanitize() } catch (e: Exception) { emptyList() }
                     if (metas.isNotEmpty()) {
                         val typeSuffix = config.catalogType.replaceFirstChar { it.uppercase() }
                         val defaultTitle = if (config.catalogName != null) "${config.catalogName} - ${typeSuffix}" else "${config.addonName} - ${config.catalogId.replaceFirstChar { it.uppercase() }}"
@@ -227,7 +237,7 @@ class AddonRepository @Inject constructor(
         try {
             val url = "${config.transportUrl}/catalog/${config.catalogType}/${config.catalogId}.json"
             val metas = try {
-                withTimeout(timeoutMs) { api.getCatalog(url) }.metas.orEmpty()
+                withTimeout(timeoutMs) { api.getCatalog(url) }.metas.orEmpty().sanitize()
             } catch (_: Exception) {
                 emptyList()
             }.take(maxItems.coerceAtLeast(1))

@@ -159,7 +159,7 @@ fun HubRow(
             ) {
                 itemsIndexed(
                     items = hubGroup.items,
-                    key = { _, item -> "hub_${hubGroup.id}_${item.id}" }
+                    key = { index, item -> "hub_${hubGroup.id}_${item.id}_$index" }
                 ) { index, hubItem ->
                     val isFirstItem = index == 0
                     val isLastItem = index == hubGroup.items.lastIndex

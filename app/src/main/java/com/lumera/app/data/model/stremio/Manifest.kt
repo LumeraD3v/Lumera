@@ -4,9 +4,9 @@ import com.google.gson.JsonElement
 
 // Tells us what the addon can do (stream, catalog, meta)
 data class Manifest(
-    val id: String,
-    val name: String,
-    val version: String,
+    val id: String = "",
+    val name: String = "",
+    val version: String = "",
     val description: String? = null,
 
     // List<JsonElement> accepts both Cinemeta (Strings) and Torrentio (Objects)
@@ -18,14 +18,14 @@ data class Manifest(
 )
 
 data class CatalogManifest(
-    val type: String,
-    val id: String,
-    val name: String,
+    val type: String = "",
+    val id: String = "",
+    val name: String = "",
     val extra: List<CatalogExtra>? = null
 )
 
 data class CatalogExtra(
-    val name: String,
+    val name: String = "",
     val isRequired: Boolean = false,
     val options: List<String>? = null
 )

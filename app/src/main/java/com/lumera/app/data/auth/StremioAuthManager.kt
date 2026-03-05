@@ -2,6 +2,7 @@ package com.lumera.app.data.auth
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.lumera.app.data.remote.StremioAddonEntry
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.security.KeyStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,17 +43,43 @@ class StremioAuthManager @Inject constructor(
     }
 
     private val encryptedPrefs: SharedPreferences by lazy {
+        try {
+            createEncryptedPrefs()
+        } catch (e: Exception) {
+            // AEADBadTagException / KeyStore corruption — nuke and rebuild
+            Log.e("StremioAuthManager", "EncryptedSharedPreferences corrupted, resetting", e)
+            clearCorruptedPrefs()
+            createEncryptedPrefs()
+        }
+    }
+
+    private fun createEncryptedPrefs(): SharedPreferences {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
-        EncryptedSharedPreferences.create(
+        return EncryptedSharedPreferences.create(
             context,
             PREFS_FILE,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
+    }
+
+    private fun clearCorruptedPrefs() {
+        // Delete the corrupted prefs file
+        val prefsFile = File(context.filesDir.parent, "shared_prefs/$PREFS_FILE.xml")
+        prefsFile.delete()
+
+        // Remove the master key from Android KeyStore
+        try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore")
+            keyStore.load(null)
+            keyStore.deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+        } catch (e: Exception) {
+            Log.e("StremioAuthManager", "Failed to clear master key", e)
+        }
     }
 
     private val _connectionState = MutableStateFlow<StremioConnectionState>(StremioConnectionState.Disconnected)
