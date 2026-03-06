@@ -370,26 +370,36 @@ class ExoPlayerBackend(
                 label = normalizedRequest.title.ifBlank { "Source" },
                 title = normalizedRequest.title.ifBlank { "Source" }
             )
-            val normalizedSources = (normalizedRequest.sources + defaultSource)
+            val normalizedSources = normalizedRequest.sources
                 .mapIndexed { index, source ->
                     val id = source.id.ifBlank { "source_$index" }
                     val label = source.label.ifBlank { "Source ${index + 1}" }
                     source.copy(id = id, label = label)
                 }
                 .distinctBy { it.id }
+                .ifEmpty { listOf(defaultSource) }
 
             _sourceOptions.value = normalizedSources
+            // Match by URL first; if no match (e.g. torrent magnet resolved to localhost),
+            // use defaultSource for playback but track the first source as current
             val initialSource = normalizedSources.firstOrNull { it.url == normalizedRequest.mediaUrl }
-                ?: normalizedSources.firstOrNull()
-                ?: defaultSource
-
-            currentSourceId = initialSource.id
-
-            prepareSource(
-                source = initialSource,
-                startPositionMs = request.startPositionMs,
-                autoPlay = request.autoPlay
-            )
+            if (initialSource != null) {
+                currentSourceId = initialSource.id
+                prepareSource(
+                    source = initialSource,
+                    startPositionMs = request.startPositionMs,
+                    autoPlay = request.autoPlay
+                )
+            } else {
+                // mediaUrl doesn't match any source (e.g. resolved torrent localhost URL)
+                // Play the mediaUrl directly, mark first source as current
+                currentSourceId = normalizedSources.firstOrNull()?.id
+                prepareSource(
+                    source = defaultSource,
+                    startPositionMs = request.startPositionMs,
+                    autoPlay = request.autoPlay
+                )
+            }
         }
     }
 
