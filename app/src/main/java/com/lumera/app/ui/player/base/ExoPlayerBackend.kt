@@ -649,13 +649,14 @@ class ExoPlayerBackend(
         lastCueGroup = null
         subtitleDelayUs.set(0L)
 
-        okHttpClient?.let { client ->
+        listOfNotNull(okHttpClient, torrentOkHttpClient).forEach { client ->
             Thread {
                 client.connectionPool.evictAll()
                 client.dispatcher.executorService.shutdown()
             }.start()
         }
         okHttpClient = null
+        torrentOkHttpClient = null
 
         _audioTracks.value = emptyList()
         _subtitleTracks.value = emptyList()
@@ -853,7 +854,8 @@ class ExoPlayerBackend(
         }
 
         val userInfo = sourceUri.userInfo
-        val okHttpFactory = OkHttpDataSource.Factory(getOrCreateOkHttpClient())
+        val isLocalhost = sourceUri.host == "127.0.0.1" || sourceUri.host == "localhost"
+        val okHttpFactory = OkHttpDataSource.Factory(getOrCreateOkHttpClient(isLocalhost))
             .setUserAgent(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -906,7 +908,18 @@ class ExoPlayerBackend(
         return MergingMediaSource(mainSource, *subtitleSources.toTypedArray())
     }
 
-    private fun getOrCreateOkHttpClient(): OkHttpClient {
+    private var torrentOkHttpClient: OkHttpClient? = null
+
+    private fun getOrCreateOkHttpClient(isLocalhost: Boolean = false): OkHttpClient {
+        if (isLocalhost) {
+            return torrentOkHttpClient ?: OkHttpClient.Builder()
+                .connectTimeout(8000, TimeUnit.MILLISECONDS)
+                .readTimeout(120_000, TimeUnit.MILLISECONDS)
+                .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+                .retryOnConnectionFailure(true)
+                .build()
+                .also { torrentOkHttpClient = it }
+        }
         return okHttpClient ?: OkHttpClient.Builder()
             .connectTimeout(8000, TimeUnit.MILLISECONDS)
             .readTimeout(8000, TimeUnit.MILLISECONDS)
