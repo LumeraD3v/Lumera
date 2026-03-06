@@ -184,9 +184,9 @@ class TorrentService : Service() {
                 // Get the handle
                 var handle: org.libtorrent4j.TorrentHandle? = null
                 var attempts = 0
-                while (handle == null && attempts < 20) {
+                while (handle == null && attempts < 200) {
                     handle = session.find(torrentInfo.infoHash())
-                    delay(500)
+                    if (handle == null) delay(50)
                     attempts++
                 }
 
@@ -258,7 +258,29 @@ class TorrentService : Service() {
                     "On-demand mode: ${torrentStream.numPieces} pieces set to IGNORE, " +
                     "prioritized first $headCount + last $tailCount for headers")
 
-                // Phase 5: Start proxy immediately — TorrentInputStream handles blocking
+                // Phase 5: Wait for critical pieces before starting proxy
+                // ExoPlayer reads head first, then seeks to tail for moov/cues, then back to start.
+                // Pre-downloading these avoids 3 sequential blocking waits in TorrentInputStream.
+                progressStatus = "Buffering headers..."
+                val firstPiece = torrentStream.firstPiece
+                val lastPiece = torrentStream.lastPiece
+                val piecesToWait = mutableSetOf(firstPiece, lastPiece)
+
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Waiting for critical pieces: $piecesToWait")
+                val pieceDeadline = System.currentTimeMillis() + 30_000L
+                while (piecesToWait.isNotEmpty()) {
+                    ensureActive()
+                    piecesToWait.removeAll { handle.havePiece(it) }
+                    if (piecesToWait.isEmpty()) break
+                    if (System.currentTimeMillis() >= pieceDeadline) {
+                        if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Timeout waiting for header pieces, proceeding anyway")
+                        break
+                    }
+                    delay(100)
+                }
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Critical pieces ready, starting proxy")
+
+                // Phase 6: Start proxy — critical pieces already downloaded
                 stopProxy()
                 val proxy = StreamProxy(movieFile, torrentStream)
                 proxy.start()
