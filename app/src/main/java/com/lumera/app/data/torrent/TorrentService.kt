@@ -40,7 +40,7 @@ class TorrentService : Service() {
 
         try {
             startForegroundService()
-            engine.start(this)
+            engine.start()
             startDownload(magnetLink, fileIdx)
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Critical Error starting service: ${e.message}")
@@ -82,7 +82,7 @@ class TorrentService : Service() {
 
             try {
                 val session = engine.getSession()
-                val saveDir = engine.getDownloadPath(this@TorrentService)
+                val saveDir = engine.getDownloadPath()
 
                 // Diagnostics: check session state
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT running: ${session.isDhtRunning()}")
@@ -90,7 +90,7 @@ class TorrentService : Service() {
 
                 // Wait for session to fully initialize (listeners + DHT)
                 var dhtWait = 0
-                while (dhtWait < 15) {
+                while (dhtWait < 5) {
                     delay(1000)
                     dhtWait++
                     val endpoints = session.listenEndpoints()
@@ -105,8 +105,8 @@ class TorrentService : Service() {
 
                 // Use fetchMagnet — the dedicated API for resolving magnet metadata
                 // This runs on Dispatchers.IO so blocking is OK
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Calling fetchMagnet (60s timeout)...")
-                val torrentData = session.fetchMagnet(magnet, 60, saveDir)
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Calling fetchMagnet (30s timeout)...")
+                val torrentData = session.fetchMagnet(magnet, 30, saveDir)
 
                 if (torrentData == null) {
                     if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "fetchMagnet returned null — no metadata found")
@@ -199,31 +199,7 @@ class TorrentService : Service() {
                     "On-demand mode: ${torrentStream.numPieces} pieces set to IGNORE, " +
                     "prioritized first $headCount + last $tailCount for headers")
 
-                // Phase 5: Wait for first piece before starting proxy
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Waiting for first piece (${torrentStream.firstPiece})...")
-                updateNotification("Buffering...")
-
-                var waitMs = 0
-                val maxWaitMs = 120_000
-                while (!handle.havePiece(torrentStream.firstPiece)) {
-                    delay(500)
-                    waitMs += 500
-                    if (waitMs >= maxWaitMs) {
-                        if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Timeout waiting for first piece")
-                        withContext(Dispatchers.Main) {
-                            onStreamError?.invoke("Torrent has no seeders. Try a different source.")
-                        }
-                        stopSelf()
-                        return@launch
-                    }
-                    if (waitMs % 10_000 == 0) {
-                        val status = handle.status()
-                        if (BuildConfig.DEBUG) Log.d("LumeraTorrent",
-                            "Waiting: peers=${status.numPeers()}, dl=${status.downloadRate() / 1024} KB/s")
-                    }
-                }
-
-                // Phase 6: Start proxy and signal ready
+                // Phase 5: Start proxy immediately — TorrentInputStream handles blocking
                 stopProxy()
                 val proxy = StreamProxy(movieFile, torrentStream)
                 proxy.start()
@@ -272,7 +248,6 @@ class TorrentService : Service() {
     override fun onDestroy() {
         stopProxy()
         downloadJob?.cancel()
-        try { engine.stop() } catch (_: Exception) {}
         cleanupDownloads()
         job.cancel()
         onStreamReady = null
@@ -282,7 +257,7 @@ class TorrentService : Service() {
 
     private fun cleanupDownloads() {
         try {
-            val downloadDir = engine.getDownloadPath(this)
+            val downloadDir = engine.getDownloadPath()
             if (downloadDir.exists()) {
                 downloadDir.deleteRecursively()
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Cleaned up downloads: ${downloadDir.absolutePath}")

@@ -3,6 +3,7 @@ package com.lumera.app.data.torrent
 import android.content.Context
 import android.util.Log
 import com.lumera.app.BuildConfig
+import dagger.hilt.android.qualifiers.ApplicationContext
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
@@ -13,21 +14,26 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class TorrentEngine @Inject constructor() {
+class TorrentEngine @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     private val session = SessionManager()
     private var isStarted = false
 
-    fun start(context: Context) {
+    init {
+        // Pre-warm: start the session immediately so DHT bootstraps in the background
+        start()
+    }
+
+    fun start() {
         if (isStarted) return
 
-        // Listen for ALL alerts to diagnose listen failures
         session.addListener(object : AlertListener {
-            override fun types(): IntArray? = null // null = all alert types
+            override fun types(): IntArray? = null
             override fun alert(alert: Alert<*>) {
                 val type = alert.type().toString()
                 val msg = alert.message()
-                // Log listen-related and error alerts
                 if (type.contains("LISTEN", ignoreCase = true) ||
                     type.contains("ERROR", ignoreCase = true) ||
                     type.contains("DHT", ignoreCase = true) ||
@@ -66,18 +72,12 @@ class TorrentEngine @Inject constructor() {
         isStarted = true
     }
 
-    fun stop() {
-        if (isStarted) {
-            session.stop()
-            isStarted = false
-        }
-    }
-
     fun getSession(): SessionManager {
+        start() // Ensure started
         return session
     }
 
-    fun getDownloadPath(context: Context): File {
+    fun getDownloadPath(): File {
         return File(context.getExternalFilesDir(null), "downloads")
     }
 }
