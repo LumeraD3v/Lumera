@@ -1558,11 +1558,13 @@ class MainActivity : ComponentActivity() {
                                                 } ?: playerState.currentStream
                                             } else playerState.currentStream
 
-                                            // Priority 1: Same bingeGroup as current stream (when autoplay or autoselect is on)
+                                            // Priority 1: Same bingeGroup + same addon as current stream (when autoplay or autoselect is on)
                                             val currentBingeGroup = actualStream?.behaviorHints?.bingeGroup
+                                            val currentAddonUrl = actualStream?.addonTransportUrl
                                             val bingeMatch = if ((autoplay || autoSelect) && !currentBingeGroup.isNullOrBlank()) {
                                                 streams.firstOrNull {
                                                     it.behaviorHints?.bingeGroup == currentBingeGroup &&
+                                                        it.addonTransportUrl == currentAddonUrl &&
                                                         (!it.url.isNullOrBlank() || !it.infoHash.isNullOrBlank())
                                                 }
                                             } else null
@@ -1699,11 +1701,13 @@ class MainActivity : ComponentActivity() {
                                                 } ?: playerState.currentStream
                                             } else playerState.currentStream
 
-                                            // Priority 1: Same bingeGroup as current stream (when autoplay or autoselect is on)
+                                            // Priority 1: Same bingeGroup + same addon as current stream (when autoplay or autoselect is on)
                                             val currentBingeGroup = actualStream?.behaviorHints?.bingeGroup
+                                            val currentAddonUrl = actualStream?.addonTransportUrl
                                             val bingeMatch = if ((autoplay || autoSelect) && !currentBingeGroup.isNullOrBlank()) {
                                                 streams.firstOrNull {
                                                     it.behaviorHints?.bingeGroup == currentBingeGroup &&
+                                                        it.addonTransportUrl == currentAddonUrl &&
                                                         (!it.url.isNullOrBlank() || !it.infoHash.isNullOrBlank())
                                                 }
                                             } else null
