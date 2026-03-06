@@ -1619,11 +1619,17 @@ class MainActivity : ComponentActivity() {
                                                 selectedPlaybackTitle = nextPlaybackTitle
                                                 playerState.selectedPlayerSubtitles = subtitlePayload
                                                 playerState.selectedPlayerSources = sourcePayload
+                                                torrentProgress = TorrentProgress("Connecting to peers...")
                                                 TorrentService.onStreamReady = { localUrl ->
+                                                    torrentProgress = null
                                                     selectedVideoUrl = localUrl
                                                 }
                                                 TorrentService.onStreamError = { error ->
+                                                    torrentProgress = null
                                                     if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                                }
+                                                TorrentService.onStreamProgress = { progress ->
+                                                    torrentProgress = progress
                                                 }
                                                 val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                     putExtra("MAGNET_LINK", nextUrl)
@@ -1768,11 +1774,17 @@ class MainActivity : ComponentActivity() {
                                                 selectedPlaybackTitle = epTitle
                                                 playerState.selectedPlayerSubtitles = subtitlePayload
                                                 playerState.selectedPlayerSources = sourcePayload
+                                                torrentProgress = TorrentProgress("Connecting to peers...")
                                                 TorrentService.onStreamReady = { localUrl ->
+                                                    torrentProgress = null
                                                     selectedVideoUrl = localUrl
                                                 }
                                                 TorrentService.onStreamError = { error ->
+                                                    torrentProgress = null
                                                     if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                                }
+                                                TorrentService.onStreamProgress = { progress ->
+                                                    torrentProgress = progress
                                                 }
                                                 val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                     putExtra("MAGNET_LINK", epUrl)
@@ -1850,11 +1862,17 @@ class MainActivity : ComponentActivity() {
                                             selectedPlaybackTitle = pending.playbackTitle
                                             playerState.selectedPlayerSubtitles = subtitlePayload
                                             playerState.selectedPlayerSources = sourcePayload
+                                            torrentProgress = TorrentProgress("Connecting to peers...")
                                             TorrentService.onStreamReady = { localUrl ->
+                                                torrentProgress = null
                                                 selectedVideoUrl = localUrl
                                             }
                                             TorrentService.onStreamError = { error ->
+                                                torrentProgress = null
                                                 if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Stream error: $error")
+                                            }
+                                            TorrentService.onStreamProgress = { progress ->
+                                                torrentProgress = progress
                                             }
                                             val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                 putExtra("MAGNET_LINK", sourceUrl)
