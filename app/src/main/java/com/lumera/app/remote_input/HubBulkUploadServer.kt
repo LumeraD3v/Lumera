@@ -298,7 +298,7 @@ class HubBulkUploadServer(
                             var st = item.hasImage ? 'Image uploaded' : 'No Image';
                             var pv = previews[item.id]
                                 ? '<img class="item-preview" src="' + previews[item.id] + '">'
-                                : (item.hasPreview ? '<img class="item-preview" src="/preview?id=' + item.id + '">' : '');
+                                : (item.hasPreview ? '<img class="item-preview" src="/preview?id=' + encodeURIComponent(item.id) + '">' : '');
                             return '<div class="item-card" data-id="' + item.id + '">'
                                 + pv
                                 + '<div class="item-info"><div class="item-title">' + esc(item.title) + '</div>'
@@ -343,7 +343,7 @@ class HubBulkUploadServer(
                     removeBtn.onclick = function() {
                         if (!confirm('Remove the image for this item?')) return;
                         var delForm = new FormData(); delForm.append('csrf_token', '${csrfToken}');
-                        fetch('/delete?id=' + currentItemId, { method: 'POST', body: delForm }).then(function(res) {
+                        fetch('/delete?id=' + encodeURIComponent(currentItemId), { method: 'POST', body: delForm }).then(function(res) {
                             if (res.ok) {
                                 var item = items.find(function(i) { return i.id === currentItemId; });
                                 item.hasImage = false;
@@ -446,7 +446,7 @@ class HubBulkUploadServer(
                         var formData = new FormData();
                         formData.append('image', base64);
                         formData.append('csrf_token', '${csrfToken}');
-                        fetch('/upload?id=' + currentItemId, { method: 'POST', body: formData })
+                        fetch('/upload?id=' + encodeURIComponent(currentItemId), { method: 'POST', body: formData })
                             .then(function(res) {
                                 if (res.ok) {
                                     var item = items.find(function(i) { return i.id === currentItemId; });

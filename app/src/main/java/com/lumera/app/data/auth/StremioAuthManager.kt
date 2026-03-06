@@ -49,7 +49,13 @@ class StremioAuthManager @Inject constructor(
             // AEADBadTagException / KeyStore corruption — nuke and rebuild
             Log.e("StremioAuthManager", "EncryptedSharedPreferences corrupted, resetting", e)
             clearCorruptedPrefs()
-            createEncryptedPrefs()
+            try {
+                createEncryptedPrefs()
+            } catch (e2: Exception) {
+                // KeyStore is permanently broken on this device — fall back to plain prefs
+                Log.e("StremioAuthManager", "KeyStore permanently broken, using plain prefs", e2)
+                context.getSharedPreferences(PREFS_FILE + "_fallback", Context.MODE_PRIVATE)
+            }
         }
     }
 
