@@ -21,7 +21,7 @@ class TorrentInputStream(
     length: Long = -1L
 ) : InputStream() {
 
-    private val raf = RandomAccessFile(file, "r")
+    private val raf: RandomAccessFile
     private var position: Long = startOffset
     private var remaining: Long = if (length > 0) length else (stream.fileSize - startOffset)
 
@@ -29,11 +29,21 @@ class TorrentInputStream(
         private const val TAG = "LumeraTorrent"
         private const val PIECE_WAIT_POLL_MS = 200L
         private const val PIECE_WAIT_TIMEOUT_MS = 90_000L
+        private const val FILE_WAIT_TIMEOUT_MS = 60_000L
         private const val LOOKAHEAD = 15
         private const val DEADLINE_MS = 1000
     }
 
     init {
+        // Wait for the file to exist on disk before opening
+        val deadline = System.currentTimeMillis() + FILE_WAIT_TIMEOUT_MS
+        while (!file.exists()) {
+            if (System.currentTimeMillis() >= deadline) {
+                throw IOException("Timeout waiting for torrent file to appear: ${file.name}")
+            }
+            Thread.sleep(PIECE_WAIT_POLL_MS)
+        }
+        raf = RandomAccessFile(file, "r")
         raf.seek(startOffset)
     }
 

@@ -1864,6 +1864,19 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onEpisodeSwitchDismissed = { playerState.pendingEpisodeSwitch = null; playerState.isEpisodeSwitchLoading = false },
+                                onMagnetSourceSelected = { magnetUrl, onReady ->
+                                    TorrentService.onStreamReady = { localUrl ->
+                                        onReady(localUrl)
+                                    }
+                                    TorrentService.onStreamError = { error ->
+                                        if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Source switch error: $error")
+                                    }
+                                    val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
+                                        putExtra("MAGNET_LINK", magnetUrl)
+                                        putExtra("FILE_IDX", -1)
+                                    }
+                                    startService(intent)
+                                },
                                 onBack = { sessionResult ->
                                     handlePlayerSessionEnd(
                                         sessionResult = sessionResult,

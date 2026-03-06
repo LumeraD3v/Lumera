@@ -28,6 +28,7 @@ class TorrentService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + job)
     private var streamProxy: StreamProxy? = null
     private var downloadJob: Job? = null
+    private var currentHandle: org.libtorrent4j.TorrentHandle? = null
 
     companion object {
         var onStreamReady: ((String) -> Unit)? = null
@@ -73,10 +74,24 @@ class TorrentService : Service() {
         }
     }
 
+    private fun removeCurrentTorrent() {
+        try {
+            currentHandle?.let { handle ->
+                engine.getSession().remove(handle)
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Removed old torrent from session")
+            }
+            currentHandle = null
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Error removing torrent", e)
+        }
+    }
+
     private fun startDownload(magnet: String, fileIdx: Int) {
         downloadJob?.cancel()
         stopProxy()
+        removeCurrentTorrent()
         cleanupDownloads()
+        engine.getDownloadPath().mkdirs()
         downloadJob = scope.launch {
             if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
 
@@ -124,6 +139,10 @@ class TorrentService : Service() {
 
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Metadata received! (${torrentData.size} bytes)")
 
+                // Check cancellation before adding torrent — fetchMagnet is a native blocking
+                // call that can't be cancelled, so a cancelled coroutine may reach here
+                ensureActive()
+
                 // Add the torrent for downloading using the resolved metadata
                 val torrentInfo = TorrentInfo(torrentData)
                 session.download(torrentInfo, saveDir)
@@ -145,6 +164,8 @@ class TorrentService : Service() {
                     stopSelf()
                     return@launch
                 }
+
+                currentHandle = handle
 
                 // Phase 3: Select file and set priorities
                 val numFiles = torrentInfo.numFiles()
@@ -252,6 +273,7 @@ class TorrentService : Service() {
     override fun onDestroy() {
         stopProxy()
         downloadJob?.cancel()
+        removeCurrentTorrent()
         cleanupDownloads()
         job.cancel()
         onStreamReady = null

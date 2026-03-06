@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import com.lumera.app.ui.player.base.BasePlayerScaffold
 import com.lumera.app.ui.player.base.NextEpisodeInfo
 import com.lumera.app.ui.player.base.PlaybackSettings
+import com.lumera.app.ui.player.base.ExoPlayerBackend
 import com.lumera.app.ui.player.base.PlayerBackendFactory
 import com.lumera.app.ui.player.base.PlayerBackendType
 import com.lumera.app.ui.player.base.PlayerLoadRequest
@@ -69,6 +70,7 @@ fun PlayerScreen(
     episodeSwitchTitle: String? = null,
     onEpisodeSwitchSourceSelected: ((sourceUrl: String) -> Unit)? = null,
     onEpisodeSwitchDismissed: (() -> Unit)? = null,
+    onMagnetSourceSelected: ((magnetUrl: String, onReady: (localUrl: String) -> Unit) -> Unit)? = null,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -79,6 +81,10 @@ fun PlayerScreen(
     }
     val playbackController = runtime.playbackController
     val renderSurface = runtime.renderSurface
+
+    LaunchedEffect(playbackController, onMagnetSourceSelected) {
+        (playbackController as? ExoPlayerBackend)?.onMagnetSourceSelected = onMagnetSourceSelected
+    }
     val uiState by playbackController.uiState.collectAsState()
     val shouldKeepScreenOn = uiState.playWhenReady || uiState.isPlaying || uiState.isBuffering
 
