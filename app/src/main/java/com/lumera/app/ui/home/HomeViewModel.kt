@@ -258,8 +258,8 @@ class HomeViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val url = "https://v3-cinemeta.strem.io/meta/${item.type}/${item.id}.json"
-                val meta = repository.getMetaDetails(url)
+                val meta = repository.resolveMetaDetails(item.type, item.id)
+                    ?: throw Exception("No meta found")
                 val fallback = MetadataFallback(
                     poster = meta.poster,
                     background = meta.background,
