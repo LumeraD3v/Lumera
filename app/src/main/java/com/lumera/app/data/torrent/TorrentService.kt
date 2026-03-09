@@ -96,11 +96,9 @@ class TorrentService : Service() {
                 api.addTorrent(magnet)
 
                 // Phase 3: Wait for metadata and resolve file index
-                val targetFileIndex = if (fileIdx >= 0) {
-                    fileIdx
-                } else {
-                    resolvelargestFile(magnet)
-                }
+                // Always resolve to largest video file — addon-provided fileIdx
+                // may not match TorrServer's file ordering in multi-file torrents
+                val targetFileIndex = resolveLargestFile(magnet, fileIdx)
 
                 if (BuildConfig.DEBUG) Log.d(TAG, "Streaming file index: $targetFileIndex")
 
@@ -144,19 +142,28 @@ class TorrentService : Service() {
         }
     }
 
-    private suspend fun resolvelargestFile(magnet: String): Int {
+    private val videoExtensions = setOf("mkv", "mp4", "avi", "webm", "ts", "m4v", "mov", "wmv", "flv")
+
+    private suspend fun resolveLargestFile(magnet: String, hintIdx: Int): Int {
         val deadline = System.currentTimeMillis() + 30_000L
         while (System.currentTimeMillis() < deadline) {
             val files = api.getFileList(magnet)
             if (files.isNotEmpty()) {
-                val largest = files.maxByOrNull { it.length }!!
-                if (BuildConfig.DEBUG) Log.d(TAG, "Resolved largest file: ${largest.path} (${largest.length / 1024 / 1024} MB)")
-                return largest.id
+                // Filter to video files only, then pick the largest
+                val videoFiles = files.filter { f ->
+                    val ext = f.path.substringAfterLast('.', "").lowercase()
+                    ext in videoExtensions
+                }
+                val target = videoFiles.maxByOrNull { it.length }
+                    ?: files.maxByOrNull { it.length }!!
+                if (BuildConfig.DEBUG) Log.d(TAG, "Resolved file: ${target.path} (${target.length / 1024 / 1024} MB, id=${target.id})")
+                return target.id
             }
             delay(500)
         }
-        if (BuildConfig.DEBUG) Log.w(TAG, "Timeout resolving file list, using index 0")
-        return 0
+        // Fallback: use hint or 0
+        if (BuildConfig.DEBUG) Log.w(TAG, "Timeout resolving file list, using index ${hintIdx.coerceAtLeast(0)}")
+        return hintIdx.coerceAtLeast(0)
     }
 
     private fun updateNotification(text: String) {

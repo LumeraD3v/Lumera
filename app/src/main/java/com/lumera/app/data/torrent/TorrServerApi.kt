@@ -1,5 +1,7 @@
 package com.lumera.app.data.torrent
 
+import android.util.Log
+import com.lumera.app.BuildConfig
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
@@ -43,9 +45,10 @@ class TorrServerApi(private val baseUrl: String = "http://127.0.0.1:8090") {
 
     suspend fun getTorrentStats(magnetLink: String): TorrentStats =
         withContext(Dispatchers.IO) {
+            val hash = extractHash(magnetLink)
             val body = JsonObject().apply {
                 addProperty("action", "get")
-                addProperty("link", magnetLink)
+                addProperty("hash", hash)
             }
             val request = Request.Builder()
                 .url("$baseUrl/torrents")
@@ -61,9 +64,10 @@ class TorrServerApi(private val baseUrl: String = "http://127.0.0.1:8090") {
         }
 
     suspend fun dropTorrent(magnetLink: String) = withContext(Dispatchers.IO) {
+        val hash = extractHash(magnetLink)
         val body = JsonObject().apply {
             addProperty("action", "drop")
-            addProperty("link", magnetLink)
+            addProperty("hash", hash)
         }
         val request = Request.Builder()
             .url("$baseUrl/torrents")
@@ -81,34 +85,50 @@ class TorrServerApi(private val baseUrl: String = "http://127.0.0.1:8090") {
 
     suspend fun getFileList(magnetLink: String): List<TorrServerFile> =
         withContext(Dispatchers.IO) {
+            // Use info hash for lookup — TorrServer matches by hash, not full magnet
+            val hash = extractHash(magnetLink)
             val body = JsonObject().apply {
                 addProperty("action", "get")
-                addProperty("link", magnetLink)
+                addProperty("hash", hash)
             }
             val request = Request.Builder()
                 .url("$baseUrl/torrents")
                 .post(body.toString().toRequestBody(jsonType))
                 .build()
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string() ?: "{}"
-            response.close()
-            if (!response.isSuccessful) return@withContext emptyList()
+            try {
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string() ?: "{}"
+                response.close()
+                if (!response.isSuccessful) {
+                    if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "getFileList HTTP ${response.code}")
+                    return@withContext emptyList()
+                }
 
-            val json = JsonParser.parseString(responseBody).asJsonObject
-            val files = json.getAsJsonArray("file_stats") ?: return@withContext emptyList()
-            files.mapIndexed { index, element ->
-                val file = element.asJsonObject
-                TorrServerFile(
-                    id = file.get("id")?.asInt ?: index,
-                    path = file.get("path")?.asString ?: "",
-                    length = file.get("length")?.asLong ?: 0L
-                )
+                val json = JsonParser.parseString(responseBody).asJsonObject
+                if (BuildConfig.DEBUG) Log.v("LumeraTorrent", "getFileList stat=${json.get("stat")}, file_stats=${json.has("file_stats")}")
+                val files = json.getAsJsonArray("file_stats") ?: return@withContext emptyList()
+                if (BuildConfig.DEBUG) Log.v("LumeraTorrent", "file_stats count: ${files.size()}")
+                files.mapIndexed { index, element ->
+                    val file = element.asJsonObject
+                    TorrServerFile(
+                        id = file.get("id")?.asInt ?: index,
+                        path = file.get("path")?.asString ?: "",
+                        length = file.get("length")?.asLong ?: 0L
+                    )
+                }
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "getFileList error: ${e.message}")
+                emptyList()
             }
         }
 
+    private fun extractHash(magnetLink: String): String {
+        val regex = Regex("btih:([a-fA-F0-9]{40})")
+        return regex.find(magnetLink)?.groupValues?.get(1) ?: magnetLink
+    }
+
     suspend fun configureSettings(cacheSizeMB: Int = 128) = withContext(Dispatchers.IO) {
         val body = JsonObject().apply {
-            addProperty("action", "set")
             addProperty("CacheSize", cacheSizeMB.toLong() * 1024 * 1024)
             addProperty("PreloadCache", 50)
             addProperty("ReaderReadAHead", 95)
