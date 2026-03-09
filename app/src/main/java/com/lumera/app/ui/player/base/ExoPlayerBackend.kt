@@ -719,6 +719,19 @@ class ExoPlayerBackend(
         hintTrackRefreshJob = null
     }
 
+    /**
+     * Pre-create ExoPlayer and localhost OkHttpClient so they're ready when
+     * the torrent stream URL arrives. Called while pieces are still downloading.
+     */
+    fun warmup() {
+        if (released) return
+        isTorrentStream = true
+        scope.launch {
+            withContext(Dispatchers.IO) { getOrCreateOkHttpClient(isLocalhost = true) }
+            ensurePlayer()
+        }
+    }
+
     private fun prepareSource(
         source: PlayerSourceOption,
         startPositionMs: Long,
@@ -751,8 +764,11 @@ class ExoPlayerBackend(
         val token = loadToken
 
         scope.launch {
-            // Yield so Compose can render the loading/buffering state before heavy work
-            yield()
+            val playerPreWarmed = exoPlayer != null
+
+            // Yield so Compose can render the loading/buffering state before heavy work.
+            // Skip when player is pre-warmed (torrent) since there's no heavy work.
+            if (!playerPreWarmed) yield()
 
             // Initialize OkHttpClient off the main thread to avoid blocking UI
             withContext(Dispatchers.IO) { getOrCreateOkHttpClient() }
@@ -787,14 +803,16 @@ class ExoPlayerBackend(
 
             if (loadToken != token || released) return@launch
 
-            // Create ExoPlayer inside coroutine so UI can render between yields
-            yield()
+            // Create ExoPlayer inside coroutine so UI can render between yields.
+            // Skip yield when pre-warmed — player already exists, nothing heavy.
+            if (!playerPreWarmed) yield()
             val player = ensurePlayer()
             if (released) return@launch
 
             // Let Compose process _playerReady and create the PlayerView/surface
             // before prepare() starts. Without this, audio auto-starts with no surface.
-            yield()
+            // When pre-warmed, surface is already created — skip the yield.
+            if (!playerPreWarmed) yield()
 
             player.setMediaSource(mediaSource)
 
@@ -821,7 +839,20 @@ class ExoPlayerBackend(
             )
         }
 
-        val loadControl = DefaultLoadControl.Builder().build()
+        val loadControl = if (isTorrentStream) {
+            // Torrent: start playback with minimal buffered data (500ms vs default 2500ms).
+            // Data arrives piece-by-piece so waiting for 2.5s of buffer wastes time.
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    /* minBufferMs = */ 5_000,
+                    /* maxBufferMs = */ 30_000,
+                    /* bufferForPlaybackMs = */ 500,
+                    /* bufferForPlaybackAfterRebufferMs = */ 1_500
+                )
+                .build()
+        } else {
+            DefaultLoadControl.Builder().build()
+        }
 
         val renderersFactory = SubtitleDelayRenderersFactory(appContext, subtitleDelayUs::get)
             .setExtensionRendererMode(playbackSettings.decoderPriority)

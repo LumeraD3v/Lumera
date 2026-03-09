@@ -19,6 +19,7 @@ import org.libtorrent4j.swig.torrent_flags_t
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import java.io.File
+import java.net.URLEncoder
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -49,7 +50,7 @@ class TorrentService : Service() {
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Critical Error starting service: ${e.message}")
             scope.launch(Dispatchers.Main) {
-                onStreamError?.invoke("Failed to start torrent engine: ${e.message}")
+                onStreamError?.invoke(e.message ?: "Failed to start torrent engine")
             }
             stopSelf()
         }
@@ -133,28 +134,13 @@ class TorrentService : Service() {
             try {
                 val saveDir = engine.getDownloadPath()
 
-                // Diagnostics: check session state
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT running: ${session.isDhtRunning()}")
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Listen endpoints: ${session.listenEndpoints()}")
+                // No DHT wait — trackers handle peer discovery in 2-3s.
+                // DHT bootstraps in the background and supplements later.
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT: ${session.isDhtRunning()}, nodes: ${session.stats().dhtNodes()}")
 
-                // Skip DHT wait if engine was pre-warmed and DHT is already bootstrapped
-                if (engine.isDhtWarmed()) {
-                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "DHT already warmed, skipping init wait (nodes=${session.stats().dhtNodes()})")
-                } else {
-                    var dhtWait = 0
-                    while (dhtWait < 5) {
-                        delay(1000)
-                        dhtWait++
-                        val endpoints = session.listenEndpoints()
-                        val dhtRunning = session.isDhtRunning()
-                        val dhtNodes = session.stats().dhtNodes()
-                        if (dhtWait % 5 == 0 || (endpoints.isNotEmpty() && dhtRunning)) {
-                            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Init wait ${dhtWait}s: endpoints=$endpoints, dht=$dhtRunning, nodes=$dhtNodes")
-                        }
-                        if (endpoints.isNotEmpty() && dhtRunning && dhtNodes > 0) break
-                    }
-                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
-                }
+                // Enrich magnet with public trackers for faster peer discovery.
+                // DHT alone can take 30+ seconds; trackers find peers in 2-5 seconds.
+                val enrichedMagnet = enrichMagnetWithTrackers(magnet)
 
                 // Add magnet directly — keeps peer connections alive for faster piece downloads.
                 // Unlike fetchMagnet() which adds a temp torrent, fetches metadata, then removes it,
@@ -164,7 +150,7 @@ class TorrentService : Service() {
 
                 // Parse magnet to extract info hash for handle lookup
                 val ec = error_code()
-                val params = libtorrent.parse_magnet_uri(magnet, ec)
+                val params = libtorrent.parse_magnet_uri(enrichedMagnet, ec)
                 if (ec.value() != 0) {
                     if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Invalid magnet URI: ${ec.message()}")
                     withContext(Dispatchers.Main) {
@@ -175,7 +161,7 @@ class TorrentService : Service() {
                 }
                 val infoHash = org.libtorrent4j.Sha1Hash(params.getInfo_hashes().get_best())
 
-                session.download(magnet, saveDir, torrent_flags_t())
+                session.download(enrichedMagnet, saveDir, torrent_flags_t())
 
                 // Find the handle (should be available almost immediately after download() call)
                 var handle: org.libtorrent4j.TorrentHandle? = null
@@ -236,9 +222,9 @@ class TorrentService : Service() {
                 }
 
                 // Select only the target file, ignore all others
-                val priorities = Array(numFiles) { Priority.IGNORE }
-                priorities[targetFileIndex] = Priority.DEFAULT
-                handle.prioritizeFiles(priorities)
+                val filePriorities = Array(numFiles) { Priority.IGNORE }
+                filePriorities[targetFileIndex] = Priority.DEFAULT
+                handle.prioritizeFiles(filePriorities)
 
                 // Phase 4: Create stream mapping and set on-demand piece priorities
                 val torrentStream = TorrentStream.create(handle, torrentInfo, targetFileIndex)
@@ -247,54 +233,98 @@ class TorrentService : Service() {
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
                     "(${torrentStream.fileSize / 1024 / 1024} MB, ${torrentStream.numPieces} pieces)")
 
-                // Set ALL pieces to IGNORE — only download what the player actually requests.
-                // This prevents libtorrent from downloading the entire file (critical for large files on limited storage).
-                for (i in torrentStream.firstPiece..torrentStream.lastPiece) {
-                    handle.piecePriority(i, Priority.IGNORE)
-                }
+                // Prioritize three groups:
+                // 1. Head (piece 0): container format header (ftyp/EBML) — ExoPlayer reads this first
+                // 2. Tail (~20 MB): moov atom / MKV Cues — ExoPlayer seeks here for metadata
+                // 3. Runway (pieces 1-N, ~20 MB): first video data — so playback starts immediately
+                //    after moov parse, instead of blocking on piece 1, 2, 3... sequentially
+                val pieceLen = torrentStream.pieceLength.toLong()
+                val headCount = (2L * 1024 * 1024 / pieceLen).toInt().coerceAtLeast(1)
+                val tailCount = (20L * 1024 * 1024 / pieceLen).toInt().coerceAtLeast(2)
+                val runwayCount = (20L * 1024 * 1024 / pieceLen).toInt().coerceAtLeast(3)
 
-                // Prioritize first/last 1% of pieces for container headers (moov atom, EBML, MKV cues, etc.)
-                val headCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
-                val tailCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
+                // Build priority array for ALL pieces atomically — avoids the transient
+                // "finished" state that occurs when setting pieces to IGNORE one-by-one,
+                // which causes libtorrent to flush its peer request queues.
+                val totalPieces = torrentInfo.numPieces()
+                val piecePriorities = Array(totalPieces) { Priority.IGNORE }
 
+                val piecesToWait = mutableSetOf<Int>()
+
+                // Head — container header, must wait for these before starting proxy
                 for (i in 0 until headCount) {
                     val idx = torrentStream.firstPiece + i
-                    handle.piecePriority(idx, Priority.TOP_PRIORITY)
-                    handle.setPieceDeadline(idx, 1000)
+                    piecePriorities[idx] = Priority.TOP_PRIORITY
+                    piecesToWait.add(idx)
                 }
+
+                // Tail — moov/cues, wait for the very last piece only.
+                // For large files, tail pieces arrive alongside head (same timeframe).
+                // For small files, moov fits in 1 piece. Either way, 1-tail is optimal.
                 for (i in 0 until tailCount) {
                     val idx = torrentStream.lastPiece - i
                     if (idx > torrentStream.firstPiece + headCount - 1) {
-                        handle.piecePriority(idx, Priority.TOP_PRIORITY)
-                        handle.setPieceDeadline(idx, 1000)
+                        piecePriorities[idx] = Priority.TOP_PRIORITY
+                        if (i == 0) piecesToWait.add(idx)
+                    }
+                }
+
+                // Runway — sequential data after head, prioritize but don't wait
+                for (i in 0 until runwayCount) {
+                    val idx = torrentStream.firstPiece + headCount + i
+                    if (idx <= torrentStream.lastPiece - tailCount) {
+                        piecePriorities[idx] = Priority.TOP_PRIORITY
+                    }
+                }
+
+                // Set ALL priorities in one atomic call — prevents transient "finished" state
+                handle.prioritizePieces(piecePriorities)
+
+                // Deadline 0 (time-critical) only for wait pieces — libtorrent sends
+                // duplicate block requests for these, concentrating bandwidth on them.
+                // Other pieces get a normal deadline so they download without wasting
+                // bandwidth on duplicates.
+                for (idx in piecesToWait) {
+                    handle.setPieceDeadline(idx, 0)
+                }
+                for (i in 0 until headCount) {
+                    val idx = torrentStream.firstPiece + i
+                    if (idx !in piecesToWait) handle.setPieceDeadline(idx, 5000)
+                }
+                for (i in 0 until tailCount) {
+                    val idx = torrentStream.lastPiece - i
+                    if (idx > torrentStream.firstPiece + headCount - 1 && idx !in piecesToWait) {
+                        handle.setPieceDeadline(idx, 5000)
+                    }
+                }
+                for (i in 0 until runwayCount) {
+                    val idx = torrentStream.firstPiece + headCount + i
+                    if (idx <= torrentStream.lastPiece - tailCount) {
+                        handle.setPieceDeadline(idx, 5000)
                     }
                 }
 
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent",
-                    "On-demand mode: ${torrentStream.numPieces} pieces set to IGNORE, " +
-                    "prioritized first $headCount + last $tailCount for headers")
+                    "On-demand mode: $totalPieces pieces, " +
+                    "prioritized head=$headCount + tail=$tailCount + runway=$runwayCount " +
+                    "(pieceSize=${pieceLen / 1024}KB, waiting for ${piecesToWait.size} pieces: $piecesToWait)")
 
-                // Phase 5: Wait for critical pieces before starting proxy
-                // ExoPlayer reads head first, then seeks to tail for moov/cues, then back to start.
-                // Pre-downloading these avoids 3 sequential blocking waits in TorrentInputStream.
-                progressStatus = "Buffering headers..."
-                val firstPiece = torrentStream.firstPiece
-                val lastPiece = torrentStream.lastPiece
-                val piecesToWait = mutableSetOf(firstPiece, lastPiece)
-
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Waiting for critical pieces: $piecesToWait")
-                val pieceDeadline = System.currentTimeMillis() + 30_000L
+                // Phase 5: Wait for head pieces only before starting proxy.
+                // Tail and runway pieces download in the background —
+                // TorrentInputStream blocks on-demand while progress overlay shows stats.
+                progressStatus = "Buffering..."
+                val pieceDeadline = System.currentTimeMillis() + 45_000L
                 while (piecesToWait.isNotEmpty()) {
                     ensureActive()
                     piecesToWait.removeAll { handle.havePiece(it) }
                     if (piecesToWait.isEmpty()) break
                     if (System.currentTimeMillis() >= pieceDeadline) {
-                        if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Timeout waiting for header pieces, proceeding anyway")
+                        if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Timeout waiting for header pieces (${piecesToWait.size} remaining), proceeding anyway")
                         break
                     }
                     delay(100)
                 }
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Critical pieces ready, starting proxy")
+                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Header pieces ready, starting proxy")
 
                 // Phase 6: Start proxy — critical pieces already downloaded
                 stopProxy()
@@ -307,7 +337,10 @@ class TorrentService : Service() {
                 if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Stream ready at: $localUrl")
                 updateNotification("Streaming...")
 
-                progressJob.cancel()
+                // Keep progressJob running — the player overlay shows torrent stats
+                // (speed, peers) while ExoPlayer buffers tail/runway pieces.
+                // progressJob is cancelled when downloadJob is cancelled or service destroyed.
+                progressStatus = "Starting playback..."
                 withContext(Dispatchers.Main) {
                     onStreamReady?.invoke(localUrl)
                 }
@@ -356,6 +389,13 @@ class TorrentService : Service() {
         onStreamError = null
         onStreamProgress = null
         super.onDestroy()
+    }
+
+    private fun enrichMagnetWithTrackers(magnet: String): String {
+        val trackerParams = TorrentEngine.PUBLIC_TRACKERS.joinToString("") { tracker ->
+            "&tr=${URLEncoder.encode(tracker, "UTF-8")}"
+        }
+        return magnet + trackerParams
     }
 
     private fun cleanupDownloads() {

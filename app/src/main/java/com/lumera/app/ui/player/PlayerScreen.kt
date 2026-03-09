@@ -78,7 +78,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val hostView = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val runtime = remember(movieId, videoUrl, backendType, playbackSettings) {
+    val runtime = remember(movieId, backendType, playbackSettings) {
         PlayerBackendFactory.create(context, backendType, playbackSettings)
     }
     val playbackController = runtime.playbackController
@@ -86,6 +86,14 @@ fun PlayerScreen(
 
     LaunchedEffect(playbackController, onMagnetSourceSelected) {
         (playbackController as? ExoPlayerBackend)?.onMagnetSourceSelected = onMagnetSourceSelected
+    }
+
+    // Pre-create ExoPlayer + OkHttpClient while torrent pieces are still downloading.
+    // By the time the URL arrives, the player is ready — prepareSource() just calls prepare().
+    LaunchedEffect(playbackController, videoUrl) {
+        if (videoUrl.isBlank()) {
+            (playbackController as? ExoPlayerBackend)?.warmup()
+        }
     }
     val uiState by playbackController.uiState.collectAsState()
     val shouldKeepScreenOn = uiState.playWhenReady || uiState.isPlaying || uiState.isBuffering

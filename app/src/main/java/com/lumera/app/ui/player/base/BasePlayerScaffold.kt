@@ -316,7 +316,7 @@ fun BasePlayerScaffold(
     val displayPositionMs = pendingPreviewSeekPosition ?: uiState.positionMs
     val isPlaybackIntended = uiState.playWhenReady
     val showLoadingOverlay = uiState.errorMessage.isNullOrBlank() &&
-        (uiState.isBuffering || !uiState.hasRenderedFirstFrame || torrentProgress != null)
+        (uiState.isBuffering || !uiState.hasRenderedFirstFrame)
     val canShowPauseOverlay = !isPlaybackIntended &&
         !uiState.isBuffering &&
         uiState.isReady &&
