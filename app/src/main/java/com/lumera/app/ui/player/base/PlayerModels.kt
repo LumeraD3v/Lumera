@@ -9,7 +9,9 @@ data class PlayerSourceOption(
     val label: String,
     val name: String? = null,
     val title: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    val fileIdx: Int = -1,
+    val fileName: String = ""
 )
 
 @Immutable

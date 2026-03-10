@@ -39,10 +39,11 @@ class TorrentService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val magnetLink = intent?.getStringExtra("MAGNET_LINK") ?: return START_NOT_STICKY
         val fileIdx = intent.getIntExtra("FILE_IDX", -1)
+        val fileName = intent.getStringExtra("FILE_NAME") ?: ""
 
         try {
             startForegroundService()
-            startDownload(magnetLink, fileIdx)
+            startDownload(magnetLink, fileIdx, fileName)
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "Critical error starting service: ${e.message}")
             scope.launch(Dispatchers.Main) {
@@ -74,7 +75,7 @@ class TorrentService : Service() {
         }
     }
 
-    private fun startDownload(magnet: String, fileIdx: Int) {
+    private fun startDownload(magnet: String, fileIdx: Int, fileName: String = "") {
         downloadJob?.cancel()
 
         // Drop previous torrent to free TorrServer's RAM cache
@@ -102,7 +103,7 @@ class TorrentService : Service() {
                 api.addTorrent(magnet)
 
                 // Phase 3: Resolve correct video file, then start streaming
-                val targetFileIndex = resolveFileIndex(magnet, fileIdx)
+                val targetFileIndex = resolveFileIndex(magnet, fileIdx, fileName)
                 if (BuildConfig.DEBUG) Log.d(TAG, "Streaming file index: $targetFileIndex")
 
                 val streamUrl = api.getStreamUrl(magnet, targetFileIndex)
@@ -149,23 +150,36 @@ class TorrentService : Service() {
 
     private val videoExtensions = setOf("mkv", "mp4", "avi", "webm", "ts", "m4v", "mov", "wmv", "flv")
 
-    private suspend fun resolveFileIndex(magnet: String, hintIdx: Int): Int {
+    private suspend fun resolveFileIndex(magnet: String, hintIdx: Int, hintName: String = ""): Int {
         val deadline = System.currentTimeMillis() + 15_000L
         while (System.currentTimeMillis() < deadline) {
             val files = api.getFileList(magnet)
             if (files.isNotEmpty()) {
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "File list (${files.size} files), hintIdx=$hintIdx:")
+                    Log.d(TAG, "File list (${files.size} files), hintIdx=$hintIdx, hintName=$hintName:")
                     files.forEach { f -> Log.d(TAG, "  id=${f.id} path=${f.path} size=${f.length / 1024 / 1024}MB") }
                 }
                 val videoFiles = files.filter { f ->
                     val ext = f.path.substringAfterLast('.', "").lowercase()
                     ext in videoExtensions
                 }
+                // Strategy 0: match by filename from behaviorHints (most reliable —
+                // immune to TorrServer reordering files alphabetically)
+                if (hintName.isNotEmpty()) {
+                    val byName = videoFiles.firstOrNull {
+                        it.path.endsWith(hintName, ignoreCase = true) ||
+                        it.path.substringAfterLast('/').equals(hintName, ignoreCase = true)
+                    }
+                    if (byName != null) {
+                        if (BuildConfig.DEBUG) Log.d(TAG, "Using filename hint: ${byName.path} (id=${byName.id})")
+                        return byName.id
+                    }
+                    if (BuildConfig.DEBUG) Log.d(TAG, "Filename hint '$hintName' not found in file list")
+                }
                 // If addon provided a specific file index (0-based torrent index), use it
                 // TorrServer IDs are 1-based, so fileIdx N = TorrServer id N+1
                 if (hintIdx >= 0) {
-                    // Strategy 1: match by ID offset (most reliable)
+                    // Strategy 1: match by ID offset
                     val byId = videoFiles.firstOrNull { it.id == hintIdx + 1 }
                     if (byId != null) {
                         if (BuildConfig.DEBUG) Log.d(TAG, "Using addon hint (by id): ${byId.path} (id=${byId.id})")

@@ -474,7 +474,9 @@ private fun buildSourcePayload(
             label = sourceDisplayLabel(stream),
             name = stream.name,
             title = stream.title,
-            description = stream.description
+            description = stream.description,
+            fileIdx = stream.fileIdx ?: -1,
+            fileName = stream.behaviorHints?.filename ?: ""
         )
     }
         .distinctBy { it.url }
@@ -1377,6 +1379,7 @@ class MainActivity : ComponentActivity() {
                                             val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                 putExtra("MAGNET_LINK", url)
                                                 putExtra("FILE_IDX", stream.fileIdx ?: -1)
+                                                putExtra("FILE_NAME", stream.behaviorHints?.filename ?: "")
                                             }
                                             startService(intent)
                                         }
@@ -1642,6 +1645,7 @@ class MainActivity : ComponentActivity() {
                                                 val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                     putExtra("MAGNET_LINK", nextUrl)
                                                     putExtra("FILE_IDX", streamToPlay.fileIdx ?: -1)
+                                                    putExtra("FILE_NAME", streamToPlay.behaviorHints?.filename ?: "")
                                                 }
                                                 startService(intent)
                                             } else {
@@ -1799,6 +1803,7 @@ class MainActivity : ComponentActivity() {
                                                 val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                     putExtra("MAGNET_LINK", epUrl)
                                                     putExtra("FILE_IDX", streamToPlay.fileIdx ?: -1)
+                                                    putExtra("FILE_NAME", streamToPlay.behaviorHints?.filename ?: "")
                                                 }
                                                 startService(intent)
                                             } else {
@@ -1822,7 +1827,9 @@ class MainActivity : ComponentActivity() {
                                             label = sourceDisplayLabel(stream),
                                             name = stream.name,
                                             title = stream.title,
-                                            description = stream.description
+                                            description = stream.description,
+                                            fileIdx = stream.fileIdx ?: -1,
+                                            fileName = stream.behaviorHints?.filename ?: ""
                                         )
                                     }?.distinctBy { it.url }
                                 },
@@ -1887,6 +1894,7 @@ class MainActivity : ComponentActivity() {
                                             val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                                 putExtra("MAGNET_LINK", sourceUrl)
                                                 putExtra("FILE_IDX", streamToPlay.fileIdx ?: -1)
+                                                putExtra("FILE_NAME", streamToPlay.behaviorHints?.filename ?: "")
                                             }
                                             startService(intent)
                                         } else {
@@ -1901,7 +1909,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onEpisodeSwitchDismissed = { playerState.pendingEpisodeSwitch = null; playerState.isEpisodeSwitchLoading = false },
-                                onMagnetSourceSelected = { magnetUrl, onReady ->
+                                onMagnetSourceSelected = { magnetUrl, sourceFileIdx, sourceFileName, onReady ->
                                     torrentProgress = TorrentProgress("Connecting to peers...")
                                     TorrentService.onStreamReady = { localUrl ->
                                         torrentProgress = null
@@ -1916,7 +1924,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                     val intent = Intent(this@MainActivity, TorrentService::class.java).apply {
                                         putExtra("MAGNET_LINK", magnetUrl)
-                                        putExtra("FILE_IDX", -1)
+                                        putExtra("FILE_IDX", sourceFileIdx)
+                                        putExtra("FILE_NAME", sourceFileName)
                                     }
                                     startService(intent)
                                 },

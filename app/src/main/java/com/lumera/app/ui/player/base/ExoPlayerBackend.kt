@@ -87,10 +87,10 @@ class ExoPlayerBackend(
 
     /**
      * Called when the user selects a magnet source in the player.
-     * The lambda receives (magnetUrl, fileIdx, onReady) where onReady should be
+     * The lambda receives (magnetUrl, fileIdx, fileName, onReady) where onReady should be
      * called with the localhost proxy URL once the torrent stream is ready.
      */
-    var onMagnetSourceSelected: ((magnetUrl: String, onReady: (localUrl: String) -> Unit) -> Unit)? = null
+    var onMagnetSourceSelected: ((magnetUrl: String, fileIdx: Int, fileName: String, onReady: (localUrl: String) -> Unit) -> Unit)? = null
 
     override val backendType: PlayerBackendType = PlayerBackendType.EXOPLAYER
 
@@ -466,7 +466,7 @@ class ExoPlayerBackend(
             val handler = onMagnetSourceSelected
             if (handler != null) {
                 _uiState.update { it.copy(isBuffering = true) }
-                handler(source.url) { localUrl ->
+                handler(source.url, source.fileIdx, source.fileName) { localUrl ->
                     if (released) return@handler
                     val resolvedSource = source.copy(url = localUrl)
                     switchToSource(sourceId, resolvedSource)
