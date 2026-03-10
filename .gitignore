@@ -51,6 +51,12 @@ Desktop.ini
 # Cloudflare Wrangler cache
 .wrangler/
 
+# Release build outputs
+app/release/
+
+# Extracted library sources
+org/
+
 # Orphaned files (not part of source)
 demo.mp4
 screen.png
