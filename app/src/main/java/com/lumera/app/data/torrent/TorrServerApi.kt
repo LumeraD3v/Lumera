@@ -127,33 +127,6 @@ class TorrServerApi(private val baseUrl: String = "http://127.0.0.1:8090") {
         return regex.find(magnetLink)?.groupValues?.get(1) ?: magnetLink
     }
 
-    suspend fun configureSettings(cacheSizeMB: Int = 128) = withContext(Dispatchers.IO) {
-        try {
-            // Read current settings first to preserve TorrServer defaults
-            val getRequest = Request.Builder().url("$baseUrl/settings").build()
-            val getResponse = client.newCall(getRequest).execute()
-            val currentSettings = getResponse.body?.string() ?: "{}"
-            getResponse.close()
-
-            val body = JsonParser.parseString(currentSettings).asJsonObject.apply {
-                addProperty("CacheSize", cacheSizeMB.toLong() * 1024 * 1024)
-                addProperty("PreloadCache", 50)
-                addProperty("ReaderReadAHead", 95)
-                addProperty("ConnectionsLimit", 50)
-                addProperty("UseDisk", false)
-            }
-
-            val postRequest = Request.Builder()
-                .url("$baseUrl/settings")
-                .post(body.toString().toRequestBody(jsonType))
-                .build()
-            client.newCall(postRequest).execute().close()
-            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Settings applied: CacheSize=${cacheSizeMB}MB, ConnectionsLimit=50")
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "configureSettings error: ${e.message}")
-        }
-    }
-
     private fun parseTorrentStats(json: JsonObject): TorrentStats {
         return TorrentStats(
             stat = json.get("stat")?.asInt ?: 0,
