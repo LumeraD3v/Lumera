@@ -1635,12 +1635,37 @@ private fun LoadingOverlay(torrentProgress: TorrentProgress? = null) {
             .background(Color.Black.copy(alpha = 0.22f)),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Spinner always centered, text placed below without shifting it
+        val progress = torrentProgress?.progress
+        if (progress != null) {
+            val animatedProgress by animateFloatAsState(
+                targetValue = progress,
+                animationSpec = tween(durationMillis = 300),
+                label = "preload"
+            )
+            Box(contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    progress = { animatedProgress },
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.White.copy(alpha = 0.15f),
+                    strokeWidth = 4.dp
+                )
+                Text(
+                    text = "${(animatedProgress * 100).toInt()}%",
+                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        } else {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary
             )
-            if (torrentProgress != null) {
-                Spacer(modifier = Modifier.height(16.dp))
+        }
+        if (torrentProgress != null) {
+            Column(
+                modifier = Modifier.align(Alignment.Center).padding(top = 80.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
                     text = torrentProgress.status,
                     color = Color.White.copy(alpha = 0.9f),

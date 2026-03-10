@@ -29,6 +29,8 @@ class TorrentService : Service() {
 
     companion object {
         private const val TAG = "LumeraTorrent"
+        // ~5MB: approximate buffer needed before ExoPlayer renders first frame
+        private const val PRELOAD_TARGET_BYTES = 5_242_880f
         var onStreamReady: ((String) -> Unit)? = null
         var onStreamError: ((String) -> Unit)? = null
         var onStreamProgress: ((TorrentProgress) -> Unit)? = null
@@ -115,13 +117,18 @@ class TorrentService : Service() {
                     delay(1000)
                     try {
                         val stats = api.getTorrentStats(magnet)
+                        // Show determinate progress only while preloading (< target)
+                        val progress = if (stats.preloadedBytes in 1 until PRELOAD_TARGET_BYTES.toLong()) {
+                            stats.preloadedBytes.toFloat() / PRELOAD_TARGET_BYTES
+                        } else null
                         withContext(Dispatchers.Main) {
                             onStreamProgress?.invoke(
                                 TorrentProgress(
                                     status = stats.statusText(),
                                     downloadSpeed = stats.downloadSpeed,
                                     peers = stats.activePeers,
-                                    seeds = stats.connectedSeeders
+                                    seeds = stats.connectedSeeders,
+                                    progress = progress
                                 )
                             )
                         }

@@ -136,7 +136,8 @@ class TorrServerApi(private val baseUrl: String = "http://127.0.0.1:8090") {
             downloadSpeed = json.get("download_speed")?.asLong ?: 0L,
             uploadSpeed = json.get("upload_speed")?.asLong ?: 0L,
             bytesRead = json.get("bytes_read")?.asLong ?: 0L,
-            torrentSize = json.get("torrent_size")?.asLong ?: 0L
+            torrentSize = json.get("torrent_size")?.asLong ?: 0L,
+            preloadedBytes = json.get("preloaded_bytes")?.asLong ?: 0L
         )
     }
 }
@@ -149,7 +150,8 @@ data class TorrentStats(
     val downloadSpeed: Long = 0L,
     val uploadSpeed: Long = 0L,
     val bytesRead: Long = 0L,
-    val torrentSize: Long = 0L
+    val torrentSize: Long = 0L,
+    val preloadedBytes: Long = 0L
 ) {
     fun statusText(): String = when (stat) {
         0 -> "Connecting to peers..."
