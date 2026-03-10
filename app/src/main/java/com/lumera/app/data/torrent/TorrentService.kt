@@ -74,9 +74,16 @@ class TorrentService : Service() {
 
     private fun startDownload(magnet: String, fileIdx: Int) {
         downloadJob?.cancel()
+
+        // Drop previous torrent to free TorrServer's RAM cache
+        val previousMagnet = currentMagnet
         currentMagnet = magnet
 
         downloadJob = scope.launch {
+            if (previousMagnet != null && previousMagnet != magnet) {
+                if (BuildConfig.DEBUG) Log.d(TAG, "Dropping previous torrent")
+                api.dropTorrent(previousMagnet)
+            }
             try {
                 // Phase 1: Start TorrServer process
                 if (BuildConfig.DEBUG) Log.d(TAG, "Starting TorrServer engine...")
@@ -85,9 +92,6 @@ class TorrentService : Service() {
                 }
                 engine.start()
 
-                // Configure cache settings
-                api.configureSettings(cacheSizeMB = 128)
-
                 // Phase 2: Add torrent
                 if (BuildConfig.DEBUG) Log.d(TAG, "Adding magnet: ${magnet.take(120)}...")
                 withContext(Dispatchers.Main) {
@@ -95,24 +99,18 @@ class TorrentService : Service() {
                 }
                 api.addTorrent(magnet)
 
-                // Phase 3: Wait for metadata and resolve file index
-                // Always resolve to largest video file — addon-provided fileIdx
-                // may not match TorrServer's file ordering in multi-file torrents
+                // Phase 3: Resolve correct video file, then start streaming
                 val targetFileIndex = resolveLargestFile(magnet, fileIdx)
-
                 if (BuildConfig.DEBUG) Log.d(TAG, "Streaming file index: $targetFileIndex")
 
-                // Phase 4: Build stream URL and notify player
                 val streamUrl = api.getStreamUrl(magnet, targetFileIndex)
-                if (BuildConfig.DEBUG) Log.d(TAG, "Stream ready at: $streamUrl")
                 updateNotification("Streaming...")
-
                 withContext(Dispatchers.Main) {
                     onStreamProgress?.invoke(TorrentProgress(status = "Starting playback..."))
                     onStreamReady?.invoke(streamUrl)
                 }
 
-                // Phase 5: Poll progress until cancelled
+                // Phase 4: Poll progress until cancelled
                 while (isActive) {
                     delay(1000)
                     try {
@@ -145,11 +143,10 @@ class TorrentService : Service() {
     private val videoExtensions = setOf("mkv", "mp4", "avi", "webm", "ts", "m4v", "mov", "wmv", "flv")
 
     private suspend fun resolveLargestFile(magnet: String, hintIdx: Int): Int {
-        val deadline = System.currentTimeMillis() + 30_000L
+        val deadline = System.currentTimeMillis() + 15_000L
         while (System.currentTimeMillis() < deadline) {
             val files = api.getFileList(magnet)
             if (files.isNotEmpty()) {
-                // Filter to video files only, then pick the largest
                 val videoFiles = files.filter { f ->
                     val ext = f.path.substringAfterLast('.', "").lowercase()
                     ext in videoExtensions
@@ -161,9 +158,9 @@ class TorrentService : Service() {
             }
             delay(500)
         }
-        // Fallback: use hint or 0
-        if (BuildConfig.DEBUG) Log.w(TAG, "Timeout resolving file list, using index ${hintIdx.coerceAtLeast(0)}")
-        return hintIdx.coerceAtLeast(0)
+        val fallback = hintIdx.coerceAtLeast(0)
+        if (BuildConfig.DEBUG) Log.w(TAG, "Timeout resolving file list, using index $fallback")
+        return fallback
     }
 
     private fun updateNotification(text: String) {
@@ -178,7 +175,8 @@ class TorrentService : Service() {
 
     override fun onDestroy() {
         downloadJob?.cancel()
-        scope.launch {
+        // Run cleanup synchronously on IO thread — must complete before job is cancelled
+        runBlocking(Dispatchers.IO) {
             currentMagnet?.let { api.dropTorrent(it) }
             engine.stop()
         }
