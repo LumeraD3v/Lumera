@@ -310,7 +310,9 @@ class AddonRepository @Inject constructor(
     }
 
     suspend fun getStreams(type: String, id: String): List<Stream> = withContext(Dispatchers.IO) {
-        val addons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
+        val addons = dao.getAllAddons().firstOrNull()
+            ?.filter { it.isEnabled && it.supportsStream }
+            ?: emptyList()
 
         val jobs = addons.map { addon ->
             async {
@@ -342,12 +344,20 @@ class AddonRepository @Inject constructor(
                 else -> false
             }
         } ?: false
+        val supportsStream = manifest.resources?.any { element ->
+            when {
+                element.isJsonPrimitive -> element.asString == "stream"
+                element.isJsonObject -> element.asJsonObject.get("name")?.asString == "stream"
+                else -> false
+            }
+        } ?: false
 
         val entity = AddonEntity(
             transportUrl = transportUrl, id = manifest.id, name = manifest.name, version = manifest.version,
             description = manifest.description, iconUrl = manifest.logo, isTrusted = false, isEnabled = true,
             nickname = null, catalogsJson = catalogsJson,
             supportsMeta = supportsMeta,
+            supportsStream = supportsStream,
             typesJson = gson.toJson(manifest.types.orEmpty()),
             idPrefixesJson = gson.toJson(manifest.idPrefixes.orEmpty())
         )

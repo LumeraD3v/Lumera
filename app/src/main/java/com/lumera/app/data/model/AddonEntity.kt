@@ -19,6 +19,7 @@ data class AddonEntity(
     val catalogsJson: String = "[]",
 
     val supportsMeta: Boolean = false,
+    val supportsStream: Boolean = true,
     val typesJson: String = "[]",
     val idPrefixesJson: String = "[]",
 

@@ -37,6 +37,12 @@ private val MIGRATION_28_29 = object : Migration(28, 29) {
     }
 }
 
+private val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE addons ADD COLUMN supportsStream INTEGER NOT NULL DEFAULT 1")
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -56,7 +62,7 @@ object DatabaseModule {
                     db.execSQL("PRAGMA synchronous = 2")
                 }
             })
-            .addMigrations(MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29)
+            .addMigrations(MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
             .build()
     }
 
