@@ -11,26 +11,26 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lumera.app.BuildConfig
-import org.libtorrent4j.Priority
-import org.libtorrent4j.TorrentInfo
 
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
-import java.io.File
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class TorrentService : Service() {
 
-    @Inject lateinit var engine: TorrentEngine
+    @Inject lateinit var engine: TorrServerEngine
 
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + job)
-    private var streamProxy: StreamProxy? = null
+    private val api = TorrServerApi()
     private var downloadJob: Job? = null
-    private var currentHandle: org.libtorrent4j.TorrentHandle? = null
+    private var currentMagnet: String? = null
 
     companion object {
+        private const val TAG = "LumeraTorrent"
+        // ~5MB: approximate buffer needed before ExoPlayer renders first frame
+        private const val PRELOAD_TARGET_BYTES = 5_242_880f
         var onStreamReady: ((String) -> Unit)? = null
         var onStreamError: ((String) -> Unit)? = null
         var onStreamProgress: ((TorrentProgress) -> Unit)? = null
@@ -39,15 +39,15 @@ class TorrentService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val magnetLink = intent?.getStringExtra("MAGNET_LINK") ?: return START_NOT_STICKY
         val fileIdx = intent.getIntExtra("FILE_IDX", -1)
+        val fileName = intent.getStringExtra("FILE_NAME") ?: ""
 
         try {
             startForegroundService()
-            engine.start()
-            startDownload(magnetLink, fileIdx)
+            startDownload(magnetLink, fileIdx, fileName)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Critical Error starting service: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e(TAG, "Critical error starting service: ${e.message}")
             scope.launch(Dispatchers.Main) {
-                onStreamError?.invoke("Failed to start torrent engine: ${e.message}")
+                onStreamError?.invoke(e.message ?: "Failed to start torrent engine")
             }
             stopSelf()
         }
@@ -64,7 +64,7 @@ class TorrentService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Lumera Streaming")
-            .setContentText("Downloading metadata...")
+            .setContentText("Starting torrent engine...")
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .build()
 
@@ -75,217 +75,138 @@ class TorrentService : Service() {
         }
     }
 
-    private fun removeCurrentTorrent() {
-        try {
-            currentHandle?.let { handle ->
-                engine.getSession().remove(handle)
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Removed old torrent from session")
-            }
-            currentHandle = null
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Error removing torrent", e)
-        }
-    }
-
-    @Volatile
-    private var progressStatus = "Connecting to peers..."
-
-    private fun emitProgress(session: org.libtorrent4j.SessionManager) {
-        val handle = currentHandle
-        val progress = if (handle != null) {
-            try {
-                val status = handle.status()
-                TorrentProgress(
-                    status = progressStatus,
-                    downloadSpeed = status.downloadRate().toLong(),
-                    peers = status.numPeers(),
-                    seeds = status.numSeeds()
-                )
-            } catch (_: Exception) {
-                TorrentProgress(status = progressStatus)
-            }
-        } else {
-            TorrentProgress(status = progressStatus)
-        }
-        onStreamProgress?.invoke(progress)
-    }
-
-    private fun startDownload(magnet: String, fileIdx: Int) {
+    private fun startDownload(magnet: String, fileIdx: Int, fileName: String = "") {
         downloadJob?.cancel()
-        stopProxy()
-        removeCurrentTorrent()
-        cleanupDownloads()
-        engine.getDownloadPath().mkdirs()
+
+        // Drop previous torrent to free TorrServer's RAM cache
+        val previousMagnet = currentMagnet
+        currentMagnet = magnet
+
         downloadJob = scope.launch {
-            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Adding magnet: ${magnet.take(120)}...")
-
-            // Launch stats reporter that polls every second until cancelled
-            val session = engine.getSession()
-            val progressJob = launch {
-                while (isActive) {
-                    withContext(Dispatchers.Main) { emitProgress(session) }
-                    delay(1000)
-                }
+            if (previousMagnet != null && previousMagnet != magnet) {
+                if (BuildConfig.DEBUG) Log.d(TAG, "Dropping previous torrent")
+                api.dropTorrent(previousMagnet)
             }
-
             try {
-                val saveDir = engine.getDownloadPath()
-
-                // Diagnostics: check session state
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session running: ${session.isRunning()}, DHT running: ${session.isDhtRunning()}")
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Listen endpoints: ${session.listenEndpoints()}")
-
-                // Skip DHT wait if engine was pre-warmed and DHT is already bootstrapped
-                if (engine.isDhtWarmed()) {
-                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "DHT already warmed, skipping init wait (nodes=${session.stats().dhtNodes()})")
-                } else {
-                    var dhtWait = 0
-                    while (dhtWait < 5) {
-                        delay(1000)
-                        dhtWait++
-                        val endpoints = session.listenEndpoints()
-                        val dhtRunning = session.isDhtRunning()
-                        val dhtNodes = session.stats().dhtNodes()
-                        if (dhtWait % 5 == 0 || (endpoints.isNotEmpty() && dhtRunning)) {
-                            if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Init wait ${dhtWait}s: endpoints=$endpoints, dht=$dhtRunning, nodes=$dhtNodes")
-                        }
-                        if (endpoints.isNotEmpty() && dhtRunning && dhtNodes > 0) break
-                    }
-                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "After init wait: endpoints=${session.listenEndpoints()}, dht=${session.isDhtRunning()}, nodes=${session.stats().dhtNodes()}")
-                }
-
-                // Use fetchMagnet — the dedicated API for resolving magnet metadata
-                // This runs on Dispatchers.IO so blocking is OK
-                progressStatus = "Fetching metadata..."
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Calling fetchMagnet (30s timeout)...")
-                val torrentData = session.fetchMagnet(magnet, 30, saveDir)
-
-                if (torrentData == null) {
-                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "fetchMagnet returned null — no metadata found")
-                    if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Session stats: dhtNodes=${session.stats().dhtNodes()}")
-                    withContext(Dispatchers.Main) {
-                        onStreamError?.invoke("Could not fetch torrent metadata. Try a different source.")
-                    }
-                    stopSelf()
-                    return@launch
-                }
-
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Metadata received! (${torrentData.size} bytes)")
-                progressStatus = "Preparing stream..."
-
-                // Check cancellation before adding torrent — fetchMagnet is a native blocking
-                // call that can't be cancelled, so a cancelled coroutine may reach here
-                ensureActive()
-
-                // Add the torrent for downloading using the resolved metadata
-                val torrentInfo = TorrentInfo(torrentData)
-                session.download(torrentInfo, saveDir)
-
-                // Get the handle
-                var handle: org.libtorrent4j.TorrentHandle? = null
-                var attempts = 0
-                while (handle == null && attempts < 20) {
-                    handle = session.find(torrentInfo.infoHash())
-                    delay(500)
-                    attempts++
-                }
-
-                if (handle == null) {
-                    if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Failed to get handle after metadata.")
-                    withContext(Dispatchers.Main) {
-                        onStreamError?.invoke("Torrent not found. Check your connection.")
-                    }
-                    stopSelf()
-                    return@launch
-                }
-
-                currentHandle = handle
-
-                // Phase 3: Select file and set priorities
-                val numFiles = torrentInfo.numFiles()
-                val fileStorage = torrentInfo.files()
-
-                val targetFileIndex = if (fileIdx in 0 until numFiles) {
-                    fileIdx
-                } else {
-                    var largestIdx = 0
-                    var largestSize = 0L
-                    for (i in 0 until numFiles) {
-                        if (fileStorage.fileSize(i) > largestSize) {
-                            largestSize = fileStorage.fileSize(i)
-                            largestIdx = i
-                        }
-                    }
-                    largestIdx
-                }
-
-                // Select only the target file, ignore all others
-                val priorities = Array(numFiles) { Priority.IGNORE }
-                priorities[targetFileIndex] = Priority.DEFAULT
-                handle.prioritizeFiles(priorities)
-
-                // Phase 4: Create stream mapping and set on-demand piece priorities
-                val torrentStream = TorrentStream.create(handle, torrentInfo, targetFileIndex)
-                val movieFile = File(saveDir, fileStorage.filePath(targetFileIndex))
-
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Streaming file[$targetFileIndex]: ${fileStorage.filePath(targetFileIndex)} " +
-                    "(${torrentStream.fileSize / 1024 / 1024} MB, ${torrentStream.numPieces} pieces)")
-
-                // Set ALL pieces to IGNORE — only download what the player actually requests.
-                // This prevents libtorrent from downloading the entire file (critical for large files on limited storage).
-                for (i in torrentStream.firstPiece..torrentStream.lastPiece) {
-                    handle.piecePriority(i, Priority.IGNORE)
-                }
-
-                // Prioritize first/last 1% of pieces for container headers (moov atom, EBML, MKV cues, etc.)
-                val headCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
-                val tailCount = (torrentStream.numPieces / 100).coerceAtLeast(1)
-
-                for (i in 0 until headCount) {
-                    val idx = torrentStream.firstPiece + i
-                    handle.piecePriority(idx, Priority.TOP_PRIORITY)
-                    handle.setPieceDeadline(idx, 1000)
-                }
-                for (i in 0 until tailCount) {
-                    val idx = torrentStream.lastPiece - i
-                    if (idx > torrentStream.firstPiece + headCount - 1) {
-                        handle.piecePriority(idx, Priority.TOP_PRIORITY)
-                        handle.setPieceDeadline(idx, 1000)
-                    }
-                }
-
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent",
-                    "On-demand mode: ${torrentStream.numPieces} pieces set to IGNORE, " +
-                    "prioritized first $headCount + last $tailCount for headers")
-
-                // Phase 5: Start proxy immediately — TorrentInputStream handles blocking
-                stopProxy()
-                val proxy = StreamProxy(movieFile, torrentStream)
-                proxy.start()
-                streamProxy = proxy
-
-                val fileName = movieFile.name
-                val localUrl = "http://127.0.0.1:${proxy.listeningPort}/$fileName"
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Stream ready at: $localUrl")
-                updateNotification("Streaming...")
-
-                progressJob.cancel()
+                // Phase 1: Start TorrServer process
+                if (BuildConfig.DEBUG) Log.d(TAG, "Starting TorrServer engine...")
                 withContext(Dispatchers.Main) {
-                    onStreamReady?.invoke(localUrl)
+                    onStreamProgress?.invoke(TorrentProgress(status = "Starting engine..."))
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                progressJob.cancel()
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Download coroutine cancelled (replaced by new download)")
-                throw e // Don't call stopSelf — a new download is taking over
+                engine.start()
+
+                // Phase 2: Add torrent
+                if (BuildConfig.DEBUG) Log.d(TAG, "Adding magnet: ${magnet.take(120)}...")
+                withContext(Dispatchers.Main) {
+                    onStreamProgress?.invoke(TorrentProgress(status = "Fetching metadata..."))
+                }
+                api.addTorrent(magnet)
+
+                // Phase 3: Resolve correct video file, then start streaming
+                val targetFileIndex = resolveFileIndex(magnet, fileIdx, fileName)
+                if (BuildConfig.DEBUG) Log.d(TAG, "Streaming file index: $targetFileIndex")
+
+                val streamUrl = api.getStreamUrl(magnet, targetFileIndex)
+                updateNotification("Streaming...")
+                withContext(Dispatchers.Main) {
+                    onStreamProgress?.invoke(TorrentProgress(status = "Starting playback..."))
+                    onStreamReady?.invoke(streamUrl)
+                }
+
+                // Phase 4: Poll progress until cancelled
+                while (isActive) {
+                    delay(1000)
+                    try {
+                        val stats = api.getTorrentStats(magnet)
+                        // Show determinate progress only while preloading (< target)
+                        val progress = if (stats.preloadedBytes in 1 until PRELOAD_TARGET_BYTES.toLong()) {
+                            stats.preloadedBytes.toFloat() / PRELOAD_TARGET_BYTES
+                        } else null
+                        withContext(Dispatchers.Main) {
+                            onStreamProgress?.invoke(
+                                TorrentProgress(
+                                    status = stats.statusText(),
+                                    downloadSpeed = stats.downloadSpeed,
+                                    peers = stats.activePeers,
+                                    seeds = stats.connectedSeeders,
+                                    progress = progress
+                                )
+                            )
+                        }
+                    } catch (_: Exception) {}
+                }
+            } catch (e: CancellationException) {
+                if (BuildConfig.DEBUG) Log.d(TAG, "Download coroutine cancelled")
+                throw e
             } catch (e: Exception) {
-                progressJob.cancel()
-                if (BuildConfig.DEBUG) Log.e("LumeraTorrent", "Error inside download loop: ${e.message}", e)
+                if (BuildConfig.DEBUG) Log.e(TAG, "Error in download: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     onStreamError?.invoke("Torrent error: ${e.message}")
                 }
                 stopSelf()
             }
         }
+    }
+
+    private val videoExtensions = setOf("mkv", "mp4", "avi", "webm", "ts", "m4v", "mov", "wmv", "flv")
+
+    private suspend fun resolveFileIndex(magnet: String, hintIdx: Int, hintName: String = ""): Int {
+        val deadline = System.currentTimeMillis() + 15_000L
+        while (System.currentTimeMillis() < deadline) {
+            val files = api.getFileList(magnet)
+            if (files.isNotEmpty()) {
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "File list (${files.size} files), hintIdx=$hintIdx, hintName=$hintName:")
+                    files.forEach { f -> Log.d(TAG, "  id=${f.id} path=${f.path} size=${f.length / 1024 / 1024}MB") }
+                }
+                val videoFiles = files.filter { f ->
+                    val ext = f.path.substringAfterLast('.', "").lowercase()
+                    ext in videoExtensions
+                }
+                // Strategy 0: match by filename from behaviorHints (most reliable —
+                // immune to TorrServer reordering files alphabetically)
+                if (hintName.isNotEmpty()) {
+                    val byName = videoFiles.firstOrNull {
+                        it.path.endsWith(hintName, ignoreCase = true) ||
+                        it.path.substringAfterLast('/').equals(hintName, ignoreCase = true)
+                    }
+                    if (byName != null) {
+                        if (BuildConfig.DEBUG) Log.d(TAG, "Using filename hint: ${byName.path} (id=${byName.id})")
+                        return byName.id
+                    }
+                    if (BuildConfig.DEBUG) Log.d(TAG, "Filename hint '$hintName' not found in file list")
+                }
+                // If addon provided a specific file index (0-based torrent index), use it
+                // TorrServer IDs are 1-based, so fileIdx N = TorrServer id N+1
+                if (hintIdx >= 0) {
+                    // Strategy 1: match by ID offset
+                    val byId = videoFiles.firstOrNull { it.id == hintIdx + 1 }
+                    if (byId != null) {
+                        if (BuildConfig.DEBUG) Log.d(TAG, "Using addon hint (by id): ${byId.path} (id=${byId.id})")
+                        return byId.id
+                    }
+                    // Strategy 2: positional index into full file list
+                    if (hintIdx < files.size) {
+                        val byPos = files[hintIdx]
+                        val ext = byPos.path.substringAfterLast('.', "").lowercase()
+                        if (ext in videoExtensions) {
+                            if (BuildConfig.DEBUG) Log.d(TAG, "Using addon hint (by pos): ${byPos.path} (id=${byPos.id})")
+                            return byPos.id
+                        }
+                    }
+                    if (BuildConfig.DEBUG) Log.w(TAG, "Hint idx=$hintIdx not resolved, falling back to largest")
+                }
+                // Fallback: pick largest video file
+                val target = videoFiles.maxByOrNull { it.length }
+                    ?: files.maxByOrNull { it.length }!!
+                if (BuildConfig.DEBUG) Log.d(TAG, "Resolved file: ${target.path} (${target.length / 1024 / 1024} MB, id=${target.id})")
+                return target.id
+            }
+            delay(500)
+        }
+        val fallback = hintIdx.coerceAtLeast(0)
+        if (BuildConfig.DEBUG) Log.w(TAG, "Timeout resolving file list, using index $fallback")
+        return fallback
     }
 
     private fun updateNotification(text: String) {
@@ -298,38 +219,19 @@ class TorrentService : Service() {
         getSystemService(NotificationManager::class.java)?.notify(1, notification)
     }
 
-    private fun stopProxy() {
-        try {
-            streamProxy?.stop()
-            streamProxy = null
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Error stopping proxy", e)
-        }
-    }
-
     override fun onDestroy() {
-        stopProxy()
         downloadJob?.cancel()
-        removeCurrentTorrent()
-        engine.saveState()
-        cleanupDownloads()
+        // Run cleanup synchronously on IO thread — must complete before job is cancelled
+        runBlocking(Dispatchers.IO) {
+            currentMagnet?.let { api.dropTorrent(it) }
+            engine.stop()
+        }
+        currentMagnet = null
         job.cancel()
         onStreamReady = null
         onStreamError = null
         onStreamProgress = null
         super.onDestroy()
-    }
-
-    private fun cleanupDownloads() {
-        try {
-            val downloadDir = engine.getDownloadPath()
-            if (downloadDir.exists()) {
-                downloadDir.deleteRecursively()
-                if (BuildConfig.DEBUG) Log.d("LumeraTorrent", "Cleaned up downloads: ${downloadDir.absolutePath}")
-            }
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("LumeraTorrent", "Failed to cleanup downloads", e)
-        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

@@ -15,6 +15,7 @@ data class Stream(
     val url: String? = null,
     val infoHash: String? = null,
     val fileIdx: Int? = null,
+    val sources: List<String>? = null,
     val subtitles: List<StreamSubtitle>? = null,
     val behaviorHints: StreamBehaviorHints? = null,
     val addonTransportUrl: String? = null

@@ -77,6 +77,9 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -141,14 +144,10 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.2.0")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // --- TORRENT ENGINE ---
-    implementation("org.libtorrent4j:libtorrent4j:2.1.0-39")
-    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-39")
-    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-39")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86:2.1.0-39")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-39")
+    // OkHttp is already available via Retrofit, but declare explicitly for TorrServer API
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // --- LOCAL WEB SERVER ---
+    // --- LOCAL WEB SERVER (used by remote input hub) ---
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     // --- QR CODE GENERATION ---

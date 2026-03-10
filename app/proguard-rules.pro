@@ -25,11 +25,8 @@
 -keep class javax.inject.** { *; }
 -keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
 
-# ─── libtorrent4j (JNI) ───
--keep class org.libtorrent4j.** { *; }
--keepclassmembers class org.libtorrent4j.** { *; }
 
-# ─── NanoHTTPD ───
+# ─── NanoHTTPD (remote input hub) ───
 -keep class fi.iki.elonen.** { *; }
 
 # ─── ZXing ───
