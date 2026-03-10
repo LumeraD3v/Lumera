@@ -48,6 +48,12 @@ class SourceSelectionStore @Inject constructor(
         editor.apply()
     }
 
+    fun hasRememberedSelection(playbackId: String): Boolean {
+        val scopedId = canonicalSourceScopeId(playbackId)
+        return !prefs.getString(streamKey(scopedId), null).isNullOrBlank()
+            || !prefs.getString(addonPrefKey(scopedId), null).isNullOrBlank()
+    }
+
     fun findPreferredStream(playbackId: String, streams: List<Stream>): Stream? {
         if (streams.isEmpty()) return null
 

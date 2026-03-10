@@ -172,16 +172,17 @@ class DetailsViewModel @Inject constructor(
         loadStreamsJob?.cancel()
         loadStreamsJob = viewModelScope.launch {
             // Show immediate loading feedback:
-            // - Manual pick path → sidebar with loading spinner
-            // - Auto-resolve path → centered spinner (sidebar stays closed)
-            val willShowSidebar = forceSourcePicker || (!autoSelectSource && !rememberSourceSelection)
+            // - Show sources sidebar when user needs to pick manually
+            // - Centered spinner when auto-resolve is expected (auto-select or remembered source)
+            val hasRemembered = rememberSourceSelection && sourceSelectionStore.hasRememberedSelection(id)
+            val showSidebar = forceSourcePicker || (!autoSelectSource && !hasRemembered)
 
             _state.value = _state.value.copy(
                 autoPlayStream = null,
                 addonSubtitles = emptyList(),
                 availableStreams = emptyList(),
                 isLoadingStreams = true,
-                sidebarState = if (willShowSidebar) SidebarState.Sources(displayTitle, null)
+                sidebarState = if (showSidebar) SidebarState.Sources(displayTitle, null)
                                else SidebarState.Closed
             )
 

@@ -289,7 +289,13 @@ fun SourcesContent(
         Spacer(Modifier.height(16.dp))
 
         if (streams == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize()
+                    .focusRequester(focusRequester)
+                    .dpadNavigation(onBack)
+                    .focusable(),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(16.dp))
