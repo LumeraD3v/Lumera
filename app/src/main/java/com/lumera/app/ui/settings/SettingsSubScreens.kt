@@ -11,6 +11,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -255,6 +256,8 @@ fun PlaybackSettings(
         }
     }
 
+    var showSubtitleStyleSidebar by remember { mutableStateOf(false) }
+
     Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -452,6 +455,60 @@ fun PlaybackSettings(
                 onBack = onGoBack,
                 focusRequester = subtitleSecondaryFR
             )
+
+            // SUBTITLE STYLE SECTION
+            Spacer(Modifier.height(12.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "Subtitle Style",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                color = Color.White.copy(0.7f),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            val subtitleStyleFR = remember { FocusRequester() }
+
+            SettingLanguageRow(
+                label = "Subtitle Appearance",
+                currentDisplayName = "${currentProfile.subtitleSize}%",
+                isSet = currentProfile.subtitleSize != 100 ||
+                        currentProfile.subtitleOffset != 0 ||
+                        currentProfile.subtitleTextColor != 0xFFFFFFFFL ||
+                        currentProfile.subtitleBackgroundColor != 0x00000000L,
+                onClick = { showSubtitleStyleSidebar = true },
+                onBack = onGoBack,
+                focusRequester = subtitleStyleFR
+            )
+        }
+
+        // Subtitle style sidebar
+        if (showSubtitleStyleSidebar) {
+            val subtitleStyleSidebarFR = remember { FocusRequester() }
+
+            LaunchedEffect(Unit) {
+                delay(200)
+                runCatching { subtitleStyleSidebarFR.requestFocus() }
+            }
+
+            Dialog(
+                onDismissRequest = { showSubtitleStyleSidebar = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                GlassSidebarScaffold(
+                    visible = true,
+                    onDismiss = { showSubtitleStyleSidebar = false },
+                    panelWidth = 380.dp
+                ) {
+                    SubtitleStyleSidebarContent(
+                        profile = currentProfile,
+                        viewModel = viewModel,
+                        focusRequester = subtitleStyleSidebarFR,
+                        onDismiss = { showSubtitleStyleSidebar = false }
+                    )
+                }
+            }
         }
 
         // Language picker sidebar
@@ -919,6 +976,322 @@ private val AUDIO_LANGUAGE_OPTIONS: List<Pair<String, String>> = listOf(
     "Tamil" to "ta",
     "Telugu" to "te"
 )
+
+// --- SUBTITLE STYLE COLORS ---
+
+@Composable
+private fun SubtitleStyleSidebarContent(
+    profile: ProfileEntity,
+    viewModel: SettingsViewModel,
+    focusRequester: FocusRequester,
+    onDismiss: () -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = "Subtitle Style",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+
+        // Preview area — dark cinematic gradient with sample subtitle text
+        // Uses proportional sizing to match real player behavior:
+        // Real player: 24sp base font on ~1080dp screen, offset = bottomPaddingFraction (0.08 + percent/100)
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1a1a2e),
+                            Color(0xFF16213e),
+                            Color(0xFF0f3460),
+                            Color(0xFF1a1a2e)
+                        )
+                    )
+                ),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.03f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            val previewTextColor = Color(profile.subtitleTextColor.toInt())
+            val previewBgColor = Color(profile.subtitleBackgroundColor.toInt())
+
+            // Readable base size that still responds to the size slider
+            val previewHeight = maxHeight
+            val baseFontSp = 13f
+            val scaledFontSize = baseFontSp * (profile.subtitleSize / 100f)
+
+            // Offset: matches real player's bottomPaddingFraction (0.08 base + percent/100)
+            val bottomPaddingFraction = (0.08f + profile.subtitleOffset / 100f).coerceIn(0f, 0.5f)
+            val bottomOffset = previewHeight * bottomPaddingFraction
+
+            Text(
+                text = "Your subtitles will\nlook like this",
+                color = previewTextColor,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = scaledFontSize.sp,
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = (scaledFontSize * 1.3f).sp,
+                    shadow = if (previewBgColor == Color.Transparent) {
+                        androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black,
+                            blurRadius = 4f
+                        )
+                    } else null
+                ),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier
+                    .padding(bottom = bottomOffset)
+                    .background(previewBgColor, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            )
+        }
+
+        // Size
+        Text(
+            text = "Size: ${profile.subtitleSize}%",
+            color = Color.White.copy(0.7f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+        )
+        CompactVoidSlider(
+            value = profile.subtitleSize.toFloat(),
+            onValueChange = { viewModel.updateSubtitleSize(profile.id, it.toInt()) },
+            valueRange = 50f..200f,
+            steps = 14,
+            focusRequester = focusRequester
+        )
+
+        // Offset
+        Text(
+            text = "Offset: ${profile.subtitleOffset}%",
+            color = Color.White.copy(0.7f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+        )
+        CompactVoidSlider(
+            value = profile.subtitleOffset.toFloat(),
+            onValueChange = { viewModel.updateSubtitleOffset(profile.id, it.toInt()) },
+            valueRange = -20f..20f,
+            steps = 39
+        )
+
+        // Text Color
+        Text(
+            text = "Text Color",
+            color = Color.White.copy(0.7f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+        )
+        SubtitleColorChipRow(
+            colors = SUBTITLE_TEXT_COLORS,
+            selectedColor = profile.subtitleTextColor,
+            onSelect = { viewModel.updateSubtitleTextColor(profile.id, it) }
+        )
+
+        // Background Color
+        Text(
+            text = "Background",
+            color = Color.White.copy(0.7f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+        )
+        SubtitleColorChipRow(
+            colors = SUBTITLE_BACKGROUND_COLORS,
+            selectedColor = profile.subtitleBackgroundColor,
+            onSelect = { viewModel.updateSubtitleBackgroundColor(profile.id, it) }
+        )
+    }
+}
+
+private val SUBTITLE_TEXT_COLORS: List<Pair<String, Long>> = listOf(
+    "White" to 0xFFFFFFFFL,
+    "Gray" to 0xFFBDBDBDL,
+    "Yellow" to 0xFFFFEB3BL,
+    "Cyan" to 0xFF00BCD4L,
+    "Red" to 0xFFF44336L,
+    "Orange" to 0xFFFF9800L,
+    "Green" to 0xFF8BC34AL
+)
+
+private val SUBTITLE_BACKGROUND_COLORS: List<Pair<String, Long>> = listOf(
+    "None" to 0x00000000L,
+    "Black" to 0xFF000000L,
+    "Semi" to 0x80000000L,
+    "Dark" to 0xFF212121L
+)
+
+@Composable
+private fun SubtitleColorChipRow(
+    colors: List<Pair<String, Long>>,
+    selectedColor: Long,
+    onSelect: (Long) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        colors.forEach { (label, colorValue) ->
+            SubtitleColorChip(
+                label = label,
+                color = Color(colorValue.toInt()),
+                isSelected = selectedColor == colorValue,
+                onClick = { onSelect(colorValue) },
+                isTransparent = colorValue == 0x00000000L
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubtitleColorChip(
+    label: String,
+    color: Color,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    isTransparent: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isFocused) 1.1f else 1f, label = "chipScale")
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .focusable(interactionSource = interactionSource)
+            .padding(2.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .then(
+                    if (isTransparent) {
+                        Modifier
+                            .background(Color.White.copy(0.05f))
+                            .border(1.dp, Color.White.copy(0.3f), CircleShape)
+                    } else {
+                        Modifier.background(color)
+                    }
+                )
+                .then(
+                    if (isSelected) Modifier.border(2.dp, accentColor, CircleShape)
+                    else if (isFocused) Modifier.border(2.dp, Color.White, CircleShape)
+                    else Modifier
+                )
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            color = if (isFocused || isSelected) Color.White else Color.Gray,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun CompactVoidSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    focusRequester: FocusRequester? = null
+) {
+    val accentColor = MaterialTheme.colorScheme.primary
+    val stepSize = (valueRange.endInclusive - valueRange.start) / (steps + 1)
+    val progress = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
+
+    Row(
+        modifier = Modifier.fillMaxWidth().height(36.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        CompactSliderButton(
+            text = "−",
+            enabled = value > valueRange.start,
+            onClick = { onValueChange((value - stepSize).coerceIn(valueRange)) },
+            focusRequester = focusRequester
+        )
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(Color.White.copy(0.2f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(accentColor)
+            )
+        }
+
+        CompactSliderButton(
+            text = "+",
+            enabled = value < valueRange.endInclusive,
+            onClick = { onValueChange((value + stepSize).coerceIn(valueRange)) }
+        )
+    }
+}
+
+@Composable
+private fun CompactSliderButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val accentColor = MaterialTheme.colorScheme.primary
+    val scale by animateFloatAsState(if (isFocused) 1.1f else 1f, label = "compactBtnScale")
+
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.White.copy(0.1f))
+            .border(
+                if (isFocused) 2.dp else 1.dp,
+                when {
+                    isFocused && enabled -> accentColor
+                    isFocused -> Color.White.copy(0.3f)
+                    else -> Color.White.copy(0.2f)
+                },
+                RoundedCornerShape(6.dp)
+            )
+            .clickable(interactionSource = interactionSource, indication = null) { if (enabled) onClick() }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusable(interactionSource = interactionSource),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = if (enabled) Color.White else Color.White.copy(0.3f),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
 
 private val SUBTITLE_LANGUAGE_OPTIONS: List<Pair<String, String>> = listOf(
     "Default" to "",

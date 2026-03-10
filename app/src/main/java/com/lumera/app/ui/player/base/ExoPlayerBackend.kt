@@ -51,6 +51,7 @@ import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import java.util.Locale
 import java.util.Base64
@@ -148,6 +149,8 @@ class ExoPlayerBackend(
     private var subtitleVerticalOffsetPercent: Int = 0
     private var subtitleSizePercent: Int = 100
     private val subtitleDelayUs = AtomicLong(0L)
+    private var subtitleTextColor: Int = 0xFFFFFFFF.toInt()
+    private var subtitleBackgroundColor: Int = 0x00000000
     private var lastCueGroup: androidx.media3.common.text.CueGroup? = null
     private companion object {
         private const val DEFAULT_SUBTITLE_BOTTOM_PADDING_FRACTION = 0.08f
@@ -302,6 +305,7 @@ class ExoPlayerBackend(
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                         applySubtitleOffset(this, subtitleVerticalOffsetPercent)
                         applySubtitleSize(this, subtitleSizePercent)
+                        applySubtitleCaptionStyle(this)
                         playerView = this
                     }
                 },
@@ -309,6 +313,7 @@ class ExoPlayerBackend(
                     pv.keepScreenOn = player?.isPlaying == true
                     applySubtitleOffset(pv, currentUiState.subtitleVerticalOffsetPercent)
                     applySubtitleSize(pv, currentUiState.subtitleSizePercent)
+                    applySubtitleCaptionStyle(pv)
                 }
             )
         } else {
@@ -594,6 +599,33 @@ class ExoPlayerBackend(
         val clamped = delayMs.coerceIn(MIN_SUBTITLE_DELAY_MS, MAX_SUBTITLE_DELAY_MS)
         subtitleDelayUs.set(clamped * 1000L)
         _uiState.update { it.copy(subtitleDelayMs = clamped) }
+    }
+
+    override fun setSubtitleTextColor(color: Int) {
+        if (released) return
+        subtitleTextColor = color
+        _uiState.update { it.copy(subtitleTextColor = color) }
+        playerView?.let { applySubtitleCaptionStyle(it) }
+    }
+
+    override fun setSubtitleBackgroundColor(color: Int) {
+        if (released) return
+        subtitleBackgroundColor = color
+        _uiState.update { it.copy(subtitleBackgroundColor = color) }
+        playerView?.let { applySubtitleCaptionStyle(it) }
+    }
+
+    private fun applySubtitleCaptionStyle(pv: PlayerView) {
+        pv.subtitleView?.setStyle(
+            CaptionStyleCompat(
+                subtitleTextColor,
+                subtitleBackgroundColor,
+                android.graphics.Color.TRANSPARENT,
+                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                android.graphics.Color.BLACK,
+                android.graphics.Typeface.DEFAULT
+            )
+        )
     }
 
     private fun applySubtitleSize(pv: PlayerView, percent: Int) {

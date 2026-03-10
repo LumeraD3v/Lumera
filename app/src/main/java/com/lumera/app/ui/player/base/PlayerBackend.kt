@@ -30,6 +30,8 @@ interface PlayerPlaybackController {
     fun setSubtitleVerticalOffset(percent: Int)
     fun setSubtitleSize(percent: Int)
     fun setSubtitleDelay(delayMs: Long)
+    fun setSubtitleTextColor(color: Int)
+    fun setSubtitleBackgroundColor(color: Int)
 
     fun release()
 }

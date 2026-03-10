@@ -36,8 +36,6 @@ data class PlayerSessionResult(
     val selectedSourceUrl: String?,
     val selectedAudioTrackId: String?,
     val selectedSubtitleTrackId: String?,
-    val subtitleVerticalOffsetPercent: Int = 0,
-    val subtitleSizePercent: Int = 100,
     val subtitleDelayMs: Long = 0L
 )
 
@@ -56,8 +54,6 @@ fun PlayerScreen(
     subtitles: List<PlayerSubtitleSource> = emptyList(),
     preferredAudioTrackId: String? = null,
     preferredSubtitleTrackId: String? = null,
-    initialSubtitleVerticalOffsetPercent: Int = 0,
-    initialSubtitleSizePercent: Int = 100,
     initialSubtitleDelayMs: Long = 0L,
     playbackSettings: PlaybackSettings = PlaybackSettings(),
     skipSegmentInfo: SkipSegmentInfo? = null,
@@ -166,12 +162,10 @@ fun PlayerScreen(
                 preferredSubtitleTrackId = preferredSubtitleTrackId
             )
         )
-        if (initialSubtitleVerticalOffsetPercent != 0) {
-            playbackController.setSubtitleVerticalOffset(initialSubtitleVerticalOffsetPercent)
-        }
-        if (initialSubtitleSizePercent != 100) {
-            playbackController.setSubtitleSize(initialSubtitleSizePercent)
-        }
+        playbackController.setSubtitleVerticalOffset(playbackSettings.subtitleOffset)
+        playbackController.setSubtitleSize(playbackSettings.subtitleSize)
+        playbackController.setSubtitleTextColor(playbackSettings.subtitleTextColor)
+        playbackController.setSubtitleBackgroundColor(playbackSettings.subtitleBackgroundColor)
         if (initialSubtitleDelayMs != 0L) {
             playbackController.setSubtitleDelay(initialSubtitleDelayMs)
         }
@@ -213,8 +207,6 @@ fun PlayerScreen(
                 selectedSourceUrl = selectedSourceUrl,
                 selectedAudioTrackId = uiState.selectedAudioTrackId,
                 selectedSubtitleTrackId = uiState.selectedSubtitleTrackId,
-                subtitleVerticalOffsetPercent = uiState.subtitleVerticalOffsetPercent,
-                subtitleSizePercent = uiState.subtitleSizePercent,
                 subtitleDelayMs = uiState.subtitleDelayMs
             )
         )

@@ -60,7 +60,11 @@ data class PlaybackSettings(
     val preferredAudioLanguage: String = "",
     val preferredAudioLanguageSecondary: String = "",
     val preferredSubtitleLanguage: String = "",
-    val preferredSubtitleLanguageSecondary: String = ""
+    val preferredSubtitleLanguageSecondary: String = "",
+    val subtitleSize: Int = 100,
+    val subtitleOffset: Int = 0,
+    val subtitleTextColor: Int = 0xFFFFFFFF.toInt(),
+    val subtitleBackgroundColor: Int = 0x00000000
 )
 
 @Immutable
@@ -95,6 +99,8 @@ data class PlayerUiState(
     val subtitleVerticalOffsetPercent: Int = 0,
     val subtitleSizePercent: Int = 100,
     val subtitleDelayMs: Long = 0L,
+    val subtitleTextColor: Int = 0xFFFFFFFF.toInt(),
+    val subtitleBackgroundColor: Int = 0x00000000,
     val isEnded: Boolean = false,
     val errorMessage: String? = null
 )

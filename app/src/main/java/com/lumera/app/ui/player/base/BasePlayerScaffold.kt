@@ -57,6 +57,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.painterResource
+import com.lumera.app.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -78,8 +80,12 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -194,6 +200,7 @@ fun BasePlayerScaffold(
     var showSubtitleOffsetBar by remember { mutableStateOf(false) }
     var showSubtitleSizeBar by remember { mutableStateOf(false) }
     var showSubtitleDelayBar by remember { mutableStateOf(false) }
+    var showSubtitleColorBar by remember { mutableStateOf(false) }
     var pendingPreviewSeekPosition by remember { mutableStateOf<Long?>(null) }
     var hideControlsSignal by remember { mutableIntStateOf(0) }
     var hideSeekOverlaySignal by remember { mutableIntStateOf(0) }
@@ -325,6 +332,7 @@ fun BasePlayerScaffold(
         !showSubtitleOffsetBar &&
         !showSubtitleSizeBar &&
         !showSubtitleDelayBar &&
+        !showSubtitleColorBar &&
         uiState.errorMessage.isNullOrBlank()
 
     fun markInteraction() {
@@ -375,6 +383,10 @@ fun BasePlayerScaffold(
             showSubtitleOffsetBar -> {
                 markInteraction()
                 showSubtitleOffsetBar = false
+            }
+            showSubtitleColorBar -> {
+                markInteraction()
+                showSubtitleColorBar = false
             }
             showPauseOverlay -> {
                 markInteraction()
@@ -437,12 +449,12 @@ fun BasePlayerScaffold(
 
     val episodeSwitchOpen = episodeSwitchSources != null || isEpisodeSwitchLoading
 
-    LaunchedEffect(showControls, isPlaybackIntended, panelOpen, showSubtitleOffsetBar, showSubtitleSizeBar, showSubtitleDelayBar, hideControlsSignal, episodeSwitchOpen) {
-        if (!showControls || !isPlaybackIntended || panelOpen || showSubtitleOffsetBar || showSubtitleSizeBar || showSubtitleDelayBar) return@LaunchedEffect
+    LaunchedEffect(showControls, isPlaybackIntended, panelOpen, showSubtitleOffsetBar, showSubtitleSizeBar, showSubtitleDelayBar, showSubtitleColorBar, hideControlsSignal, episodeSwitchOpen) {
+        if (!showControls || !isPlaybackIntended || panelOpen || showSubtitleOffsetBar || showSubtitleSizeBar || showSubtitleDelayBar || showSubtitleColorBar) return@LaunchedEffect
         if (!uiState.errorMessage.isNullOrBlank()) return@LaunchedEffect
         if (episodeSwitchOpen) return@LaunchedEffect
         delay(CONTROLS_AUTO_HIDE_MS)
-        if (showControls && isPlaybackIntended && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar) {
+        if (showControls && isPlaybackIntended && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar && !showSubtitleColorBar) {
             showControls = false
         }
     }
@@ -468,8 +480,8 @@ fun BasePlayerScaffold(
         }
     }
 
-    LaunchedEffect(showControls, panelOpen, showSubtitleOffsetBar, showSubtitleSizeBar, showSubtitleDelayBar, hasError, episodeSwitchOpen) {
-        if (showSubtitleOffsetBar || showSubtitleSizeBar || showSubtitleDelayBar) return@LaunchedEffect
+    LaunchedEffect(showControls, panelOpen, showSubtitleOffsetBar, showSubtitleSizeBar, showSubtitleDelayBar, showSubtitleColorBar, hasError, episodeSwitchOpen) {
+        if (showSubtitleOffsetBar || showSubtitleSizeBar || showSubtitleDelayBar || showSubtitleColorBar) return@LaunchedEffect
         if (overlayVisible || showPlayNextButton || showSkipIntro || hasError) return@LaunchedEffect
         if (episodeSwitchOpen) return@LaunchedEffect
 
@@ -653,7 +665,7 @@ fun BasePlayerScaffold(
         }
 
         AnimatedVisibility(
-            visible = showControls && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar && uiState.errorMessage.isNullOrBlank(),
+            visible = showControls && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar && !showSubtitleColorBar && uiState.errorMessage.isNullOrBlank(),
             enter = slideInVertically(animationSpec = tween(200)) { -it } + fadeIn(animationSpec = tween(200)),
             exit = slideOutVertically(animationSpec = tween(200)) { -it } + fadeOut(animationSpec = tween(200)),
             modifier = Modifier
@@ -667,7 +679,7 @@ fun BasePlayerScaffold(
         }
 
         AnimatedVisibility(
-            visible = showControls && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar && uiState.errorMessage.isNullOrBlank(),
+            visible = showControls && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar && !showSubtitleColorBar && uiState.errorMessage.isNullOrBlank(),
             enter = slideInVertically(animationSpec = tween(200)) { it } + fadeIn(animationSpec = tween(200)),
             exit = slideOutVertically(animationSpec = tween(200)) { it } + fadeOut(animationSpec = tween(200))
         ) {
@@ -762,6 +774,7 @@ fun BasePlayerScaffold(
                 showSubtitleOffsetBar = false
                 showSubtitleSizeBar = false
                 showSubtitleDelayBar = false
+                showSubtitleColorBar = false
             }
         )
 
@@ -830,6 +843,10 @@ fun BasePlayerScaffold(
             onShowDelayBar = {
                 closePanel()
                 showSubtitleDelayBar = true
+            },
+            onShowColorBar = {
+                closePanel()
+                showSubtitleColorBar = true
             }
         )
 
@@ -908,8 +925,34 @@ fun BasePlayerScaffold(
             }
         )
 
+        SubtitleColorTopBar(
+            visible = showSubtitleColorBar,
+            currentTextColor = uiState.subtitleTextColor,
+            currentBackgroundColor = uiState.subtitleBackgroundColor,
+            isPlaying = isPlaybackIntended,
+            onPlayPause = {
+                markInteraction()
+                playbackController.togglePlayPause()
+            },
+            onSetTextColor = { color ->
+                markInteraction()
+                playbackController.setSubtitleTextColor(color)
+            },
+            onSetBackgroundColor = { color ->
+                markInteraction()
+                playbackController.setSubtitleBackgroundColor(color)
+            },
+            onClose = {
+                markInteraction()
+                showSubtitleColorBar = false
+                showControls = true
+                scheduleHideControls()
+                runCatching { playPauseFocusRequester.requestFocus() }
+            }
+        )
+
         // Animate bottom padding so buttons move above controls when visible
-        val controlsVisible = showControls && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar && uiState.errorMessage.isNullOrBlank()
+        val controlsVisible = showControls && !panelOpen && !showSubtitleOffsetBar && !showSubtitleSizeBar && !showSubtitleDelayBar && !showSubtitleColorBar && uiState.errorMessage.isNullOrBlank()
         val buttonBottomPadding by animateDpAsState(
             targetValue = if (controlsVisible) 120.dp else 32.dp,
             animationSpec = tween(200),
@@ -2183,7 +2226,8 @@ private fun BoxScope.SubtitleSelectionSidePanel(
     onSelectTrack: (String?) -> Unit,
     onShowOffsetBar: () -> Unit = {},
     onShowSizeBar: () -> Unit = {},
-    onShowDelayBar: () -> Unit = {}
+    onShowDelayBar: () -> Unit = {},
+    onShowColorBar: () -> Unit = {}
 ) {
     if (!visible) return
 
@@ -2383,6 +2427,21 @@ private fun BoxScope.SubtitleSelectionSidePanel(
                     Icon(
                         imageVector = Icons.Filled.Timer,
                         contentDescription = "Subtitle delay",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                IconButton(
+                    onClick = onShowColorBar,
+                    colors = IconButtonDefaults.colors(
+                        containerColor = Color.White.copy(alpha = 0.12f),
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.palette_icon),
+                        contentDescription = "Subtitle color",
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -2726,6 +2785,65 @@ private fun SubtitleVariantListItem(
             }
         }
     }
+}
+
+// --- SUBTITLE COLOR PRESETS FOR PLAYER ---
+
+private val PLAYER_TEXT_COLORS = listOf(
+    "White" to 0xFFFFFFFF.toInt(),
+    "Gray" to 0xFFBDBDBD.toInt(),
+    "Yellow" to 0xFFFFEB3B.toInt(),
+    "Cyan" to 0xFF00BCD4.toInt(),
+    "Red" to 0xFFF44336.toInt(),
+    "Orange" to 0xFFFF9800.toInt(),
+    "Green" to 0xFF8BC34A.toInt()
+)
+
+private val PLAYER_BACKGROUND_COLORS = listOf(
+    "None" to 0x00000000,
+    "Black" to 0xFF000000.toInt(),
+    "Semi" to 0x80000000.toInt(),
+    "Dark" to 0xFF212121.toInt()
+)
+
+@Composable
+private fun PlayerSubtitleColorChip(
+    color: Color,
+    isSelected: Boolean,
+    isTransparent: Boolean = false,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.15f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "subtitleColorChipScale"
+    )
+
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .scale(scale)
+            .clip(CircleShape)
+            .then(
+                if (isTransparent) {
+                    Modifier
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+                } else {
+                    Modifier.background(color)
+                }
+            )
+            .then(
+                if (isSelected) Modifier.border(2.dp, Color.White, CircleShape)
+                else if (isFocused) Modifier.border(2.dp, Color.White.copy(alpha = 0.7f), CircleShape)
+                else Modifier
+            )
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .focusable(interactionSource = interactionSource)
+    )
 }
 
 @Composable
@@ -3764,6 +3882,175 @@ private fun BoxScope.SubtitleDelayTopBar(
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Close delay bar",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.SubtitleColorTopBar(
+    visible: Boolean,
+    currentTextColor: Int,
+    currentBackgroundColor: Int,
+    isPlaying: Boolean,
+    onPlayPause: () -> Unit,
+    onSetTextColor: (Int) -> Unit,
+    onSetBackgroundColor: (Int) -> Unit,
+    onClose: () -> Unit
+) {
+    if (!visible) return
+
+    val playPauseFocus = remember { FocusRequester() }
+    val firstTextChipFocus = remember { FocusRequester() }
+    val lastTextChipFocus = remember { FocusRequester() }
+    val firstBgChipFocus = remember { FocusRequester() }
+    val lastBgChipFocus = remember { FocusRequester() }
+    val closeFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { firstTextChipFocus.requestFocus() }
+    }
+
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(180)),
+        exit = fadeOut(animationSpec = tween(140)),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 32.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .background(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Play/Pause button
+            IconButton(
+                onClick = onPlayPause,
+                colors = IconButtonDefaults.colors(
+                    containerColor = Color.White.copy(alpha = 0.15f),
+                    contentColor = Color.White
+                ),
+                modifier = Modifier
+                    .size(44.dp)
+                    .focusRequester(playPauseFocus)
+                    .focusProperties {
+                        left = playPauseFocus
+                        right = firstTextChipFocus
+                        up = playPauseFocus
+                        down = playPauseFocus
+                    }
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
+            // Color chip columns
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val textColorCount = PLAYER_TEXT_COLORS.size
+                val bgColorCount = PLAYER_BACKGROUND_COLORS.size
+
+                // Text color row — block up to prevent escape
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.onPreviewKeyEvent {
+                        it.key == Key.DirectionUp && it.type == KeyEventType.KeyDown
+                    }
+                ) {
+                    Text(
+                        text = "Text",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.width(32.dp)
+                    )
+                    PLAYER_TEXT_COLORS.forEachIndexed { index, (_, colorValue) ->
+                        val chipModifier = when (index) {
+                            0 -> Modifier
+                                .focusRequester(firstTextChipFocus)
+                                .focusProperties { left = playPauseFocus }
+                            textColorCount - 1 -> Modifier
+                                .focusRequester(lastTextChipFocus)
+                                .focusProperties { right = closeFocus }
+                            else -> Modifier
+                        }
+                        PlayerSubtitleColorChip(
+                            color = Color(colorValue),
+                            isSelected = currentTextColor == colorValue,
+                            onClick = { onSetTextColor(colorValue) },
+                            modifier = chipModifier
+                        )
+                    }
+                }
+
+                // Background color row — block down to prevent escape
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.onPreviewKeyEvent {
+                        it.key == Key.DirectionDown && it.type == KeyEventType.KeyDown
+                    }
+                ) {
+                    Text(
+                        text = "BG",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.width(32.dp)
+                    )
+                    PLAYER_BACKGROUND_COLORS.forEachIndexed { index, (_, colorValue) ->
+                        val chipModifier = when (index) {
+                            0 -> Modifier
+                                .focusRequester(firstBgChipFocus)
+                                .focusProperties { left = playPauseFocus }
+                            bgColorCount - 1 -> Modifier
+                                .focusRequester(lastBgChipFocus)
+                                .focusProperties { right = closeFocus }
+                            else -> Modifier
+                        }
+                        PlayerSubtitleColorChip(
+                            color = Color(colorValue),
+                            isSelected = currentBackgroundColor == colorValue,
+                            isTransparent = colorValue == 0x00000000,
+                            onClick = { onSetBackgroundColor(colorValue) },
+                            modifier = chipModifier
+                        )
+                    }
+                }
+            }
+
+            // Close button
+            IconButton(
+                onClick = onClose,
+                colors = IconButtonDefaults.colors(
+                    containerColor = Color.Transparent,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier
+                    .size(40.dp)
+                    .focusRequester(closeFocus)
+                    .focusProperties {
+                        left = lastTextChipFocus
+                        right = closeFocus
+                        up = closeFocus
+                        down = closeFocus
+                    }
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Close color bar",
                     modifier = Modifier.size(22.dp)
                 )
             }

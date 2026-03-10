@@ -50,5 +50,10 @@ data class ProfileEntity(
     val preferredAudioLanguage: String = "",
     val preferredAudioLanguageSecondary: String = "",
     val preferredSubtitleLanguage: String = "",
-    val preferredSubtitleLanguageSecondary: String = ""
+    val preferredSubtitleLanguageSecondary: String = "",
+
+    val subtitleSize: Int = 100,                     // 50-200%
+    val subtitleOffset: Int = 0,                     // -20 to 20%
+    val subtitleTextColor: Long = 0xFFFFFFFFL,       // White (ARGB)
+    val subtitleBackgroundColor: Long = 0x00000000L  // Transparent
 )

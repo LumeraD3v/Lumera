@@ -160,4 +160,32 @@ class SettingsViewModel @Inject constructor(
             if (profile != null) dao.insertProfile(profile.copy(preferredSubtitleLanguageSecondary = language))
         }
     }
+
+    fun updateSubtitleSize(profileId: Int, size: Int) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(subtitleSize = size))
+        }
+    }
+
+    fun updateSubtitleOffset(profileId: Int, offset: Int) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(subtitleOffset = offset))
+        }
+    }
+
+    fun updateSubtitleTextColor(profileId: Int, color: Long) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(subtitleTextColor = color))
+        }
+    }
+
+    fun updateSubtitleBackgroundColor(profileId: Int, color: Long) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(subtitleBackgroundColor = color))
+        }
+    }
 }

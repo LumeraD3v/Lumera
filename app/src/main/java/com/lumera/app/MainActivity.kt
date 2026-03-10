@@ -618,21 +618,15 @@ private fun handlePlayerSessionEnd(
 
     val hasAudioTrackSelection = !sessionResult.selectedAudioTrackId.isNullOrBlank()
     val hasSubtitleTrackSelection = !sessionResult.selectedSubtitleTrackId.isNullOrBlank()
-    val hasSubtitleOffsetChange = sessionResult.subtitleVerticalOffsetPercent != 0
-    val hasSubtitleSizeChange = sessionResult.subtitleSizePercent != 100
     val hasSubtitleDelayChange = sessionResult.subtitleDelayMs != 0L
-    if (hasAudioTrackSelection || hasSubtitleTrackSelection || hasSubtitleOffsetChange || hasSubtitleSizeChange || hasSubtitleDelayChange) {
+    if (hasAudioTrackSelection || hasSubtitleTrackSelection || hasSubtitleDelayChange) {
         playbackTrackSelectionStore.updateSelection(
             playbackId = playbackId,
             audioTrackId = sessionResult.selectedAudioTrackId,
             subtitleTrackId = sessionResult.selectedSubtitleTrackId,
-            subtitleVerticalOffsetPercent = sessionResult.subtitleVerticalOffsetPercent,
-            subtitleSizePercent = sessionResult.subtitleSizePercent,
             subtitleDelayMs = sessionResult.subtitleDelayMs,
             updateAudio = hasAudioTrackSelection,
             updateSubtitle = hasSubtitleTrackSelection,
-            updateSubtitleOffset = true,
-            updateSubtitleSize = true,
             updateSubtitleDelay = true
         )
     }
@@ -1529,8 +1523,6 @@ class MainActivity : ComponentActivity() {
                                 subtitles = playerSubtitles,
                                 preferredAudioTrackId = rememberedTrackSelection?.audioTrackId,
                                 preferredSubtitleTrackId = rememberedTrackSelection?.subtitleTrackId,
-                                initialSubtitleVerticalOffsetPercent = rememberedTrackSelection?.subtitleVerticalOffsetPercent ?: 0,
-                                initialSubtitleSizePercent = rememberedTrackSelection?.subtitleSizePercent ?: 100,
                                 initialSubtitleDelayMs = rememberedTrackSelection?.subtitleDelayMs ?: 0L,
                                 playbackSettings = PlaybackSettings(
                                     tunnelingEnabled = currentProfile?.tunnelingEnabled ?: false,
@@ -1545,7 +1537,11 @@ class MainActivity : ComponentActivity() {
                                     preferredAudioLanguage = currentProfile?.preferredAudioLanguage ?: "",
                                     preferredAudioLanguageSecondary = currentProfile?.preferredAudioLanguageSecondary ?: "",
                                     preferredSubtitleLanguage = currentProfile?.preferredSubtitleLanguage ?: "",
-                                    preferredSubtitleLanguageSecondary = currentProfile?.preferredSubtitleLanguageSecondary ?: ""
+                                    preferredSubtitleLanguageSecondary = currentProfile?.preferredSubtitleLanguageSecondary ?: "",
+                                    subtitleSize = currentProfile?.subtitleSize ?: 100,
+                                    subtitleOffset = currentProfile?.subtitleOffset ?: 0,
+                                    subtitleTextColor = currentProfile?.subtitleTextColor?.toInt() ?: 0xFFFFFFFF.toInt(),
+                                    subtitleBackgroundColor = currentProfile?.subtitleBackgroundColor?.toInt() ?: 0x00000000
                                 ),
                                 skipSegmentInfo = skipSegmentInfo,
                                 nextEpisodeInfo = if (nextEpisode != null) nextEpisodeInfo else null,
