@@ -3165,8 +3165,12 @@ private fun subtitleLanguageKey(language: String?): String = normalizeLanguageTo
 private fun subtitleLanguageDisplayName(groupKey: String, rawLanguage: String?): String {
     if (groupKey == "__off__") return "Off"
     if (groupKey == "und") return "Unknown"
-    if (groupKey == "pt-BR") return "Portuguese (Brazil)"
-    if (groupKey == "es-419") return "Spanish (Latin America)"
+    if (groupKey.contains('-')) {
+        val canonicalDisplay = Locale.forLanguageTag(groupKey).displayName
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.equals(groupKey, ignoreCase = true) }
+        if (canonicalDisplay != null) return canonicalDisplay
+    }
 
     if (groupKey.length in 2..3) {
         val canonicalDisplay = Locale.forLanguageTag(groupKey).displayLanguage
