@@ -1373,6 +1373,8 @@ class MainActivity : ComponentActivity() {
                                 autoSelectSource = currentProfile?.autoSelectSource ?: false,
                                 rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
                                 sourceSortingEnabled = currentProfile?.sourceSortingEnabled ?: true,
+                                sourceSortPrimary = currentProfile?.sourceSortPrimary ?: "quality",
+                                sourceSortSecondary = currentProfile?.sourceSortSecondary ?: "size",
                                 sourceEnabledQualities = currentProfile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown",
                                 sourceExcludePhrases = currentProfile?.sourceExcludePhrases ?: "",
                                 onPlayClick = { url, playbackId, playbackType, playbackTitle, seriesTitle, logo, stream, addonSubtitles, availableStreams, episodes ->
@@ -1603,7 +1605,7 @@ class MainActivity : ComponentActivity() {
                                                 val enabledQ = StreamSortingService.parseEnabledQualities(currentProfile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
                                                 val excludeP = StreamSortingService.parseExcludePhrases(currentProfile?.sourceExcludePhrases ?: "")
                                                 val addonOrders = addonRepository.getAddonSortOrders()
-                                                streamSortingService.sortAndFilter(rawStreams, enabledQ, excludeP, addonOrders)
+                                                streamSortingService.sortAndFilter(rawStreams, enabledQ, excludeP, addonOrders, currentProfile?.sourceSortPrimary ?: "quality", currentProfile?.sourceSortSecondary ?: "size")
                                             } else rawStreams
 
                                             if (streams.isEmpty()) {
@@ -1754,7 +1756,7 @@ class MainActivity : ComponentActivity() {
                                                 val enabledQ = StreamSortingService.parseEnabledQualities(currentProfile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
                                                 val excludeP = StreamSortingService.parseExcludePhrases(currentProfile?.sourceExcludePhrases ?: "")
                                                 val addonOrders = addonRepository.getAddonSortOrders()
-                                                streamSortingService.sortAndFilter(rawStreams2, enabledQ, excludeP, addonOrders)
+                                                streamSortingService.sortAndFilter(rawStreams2, enabledQ, excludeP, addonOrders, currentProfile?.sourceSortPrimary ?: "quality", currentProfile?.sourceSortSecondary ?: "size")
                                             } else rawStreams2
 
                                             if (streams.isEmpty()) {

@@ -49,6 +49,7 @@ enum class SettingsSection(val label: String, @DrawableRes val iconRes: Int) {
     Theme("Theme", R.drawable.palette_icon),
     Dashboard("Home Screen", R.drawable.home_icon),
     Playback("Playback", R.drawable.playback_icon),
+    SourcePreferences("Source Preferences", R.drawable.source_preferences_icon),
     Addons("Addons", R.drawable.puzzle_icon),
     Integrations("Integrations", R.drawable.integrations_icon),
     About("About", R.drawable.info_icon)
@@ -274,6 +275,13 @@ fun SettingsScreen(
                         }
                         SettingsSection.Playback -> {
                             PlaybackSettings(
+                                currentProfile = currentProfile,
+                                viewModel = viewModel,
+                                onGoBack = { itemRequesters[selectedSection]?.requestFocus() }
+                            )
+                        }
+                        SettingsSection.SourcePreferences -> {
+                            SourcePreferencesSettings(
                                 currentProfile = currentProfile,
                                 viewModel = viewModel,
                                 onGoBack = { itemRequesters[selectedSection]?.requestFocus() }

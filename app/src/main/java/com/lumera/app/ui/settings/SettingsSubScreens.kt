@@ -345,97 +345,6 @@ fun PlaybackSettings(
                 onBack = onGoBack
             )
 
-            Spacer(Modifier.height(15.dp))
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
-            Spacer(Modifier.height(15.dp))
-
-            // SOURCE SORTING
-            Text(
-                "Source Sorting",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-                color = Color.White
-            )
-            Text(
-                "Sort sources by quality, size, and seeds. Applies to the source list and auto-select.",
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
-                color = Color.White.copy(0.6f),
-                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
-            )
-
-            SettingToggleRow(
-                label = "Sort Sources by Quality",
-                subtitle = "Rank sources by resolution, file size, and seed count",
-                isChecked = currentProfile.sourceSortingEnabled,
-                onCheckedChange = { viewModel.updateSourceSortingEnabled(currentProfile.id, it) },
-                onBack = onGoBack
-            )
-
-            if (currentProfile.sourceSortingEnabled) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Allowed Qualities",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium),
-                    color = Color.White.copy(0.6f),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
-
-                val enabledKeys = remember(currentProfile.sourceEnabledQualities) {
-                    currentProfile.sourceEnabledQualities.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-                }
-
-                fun toggleQuality(key: String) {
-                    val newKeys = if (key in enabledKeys) enabledKeys - key else enabledKeys + key
-                    viewModel.updateSourceEnabledQualities(currentProfile.id, newKeys.joinToString(","))
-                }
-
-                SettingToggleRow(label = "4K / UHD", isChecked = "4k" in enabledKeys, onCheckedChange = { toggleQuality("4k") }, onBack = onGoBack)
-                SettingToggleRow(label = "1080p / FHD", isChecked = "1080p" in enabledKeys, onCheckedChange = { toggleQuality("1080p") }, onBack = onGoBack)
-                SettingToggleRow(label = "720p / HD", isChecked = "720p" in enabledKeys, onCheckedChange = { toggleQuality("720p") }, onBack = onGoBack)
-                SettingToggleRow(label = "480p / SD", isChecked = "sd" in enabledKeys, onCheckedChange = { toggleQuality("sd") }, onBack = onGoBack)
-                SettingToggleRow(label = "CAM / Telesync", isChecked = "cam" in enabledKeys, onCheckedChange = { toggleQuality("cam") }, onBack = onGoBack)
-                SettingToggleRow(label = "Unknown Quality", isChecked = "unknown" in enabledKeys, onCheckedChange = { toggleQuality("unknown") }, onBack = onGoBack)
-
-                Spacer(Modifier.height(8.dp))
-
-                // EXCLUDE PHRASES
-                var excludeInput by remember(currentProfile.sourceExcludePhrases) {
-                    mutableStateOf(currentProfile.sourceExcludePhrases)
-                }
-                Text(
-                    "Exclude Phrases (comma-separated)",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium),
-                    color = Color.White.copy(0.6f),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
-                BasicTextField(
-                    value = excludeInput,
-                    onValueChange = { excludeInput = it },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontSize = 14.sp),
-                    cursorBrush = SolidColor(Color.White),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(
-                        onDone = { viewModel.updateSourceExcludePhrases(currentProfile.id, excludeInput) }
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White.copy(0.08f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    decorationBox = { innerTextField ->
-                        Box {
-                            if (excludeInput.isEmpty()) {
-                                Text("e.g. 3D, Sample", color = Color.White.copy(0.3f), fontSize = 14.sp)
-                            }
-                            innerTextField()
-                        }
-                    }
-                )
-            }
-
-            Spacer(Modifier.height(15.dp))
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
-            Spacer(Modifier.height(15.dp))
-
             // SKIP INTRO
             SettingToggleRow(
                 label = "Skip Intro",
@@ -1565,6 +1474,164 @@ private fun LanguagePickerContent(
                 }
             }
         }
+    }
+}
+
+// --- SOURCE PREFERENCES SETTINGS ---
+
+@Composable
+fun SourcePreferencesSettings(
+    currentProfile: ProfileEntity?,
+    viewModel: SettingsViewModel,
+    onGoBack: () -> Unit
+) {
+    if (currentProfile == null) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.Start
+    ) {
+        // HEADER
+        Text(
+            "Source Preferences",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
+            color = Color.White
+        )
+        Text(
+            "Configure how sources are sorted and filtered.",
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+            color = Color.White.copy(0.6f),
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Spacer(Modifier.height(15.dp))
+
+        // ENABLE SORTING
+        SettingToggleRow(
+            label = "Sort Sources",
+            subtitle = "Rank sources by quality, file size, and seed count",
+            isChecked = currentProfile.sourceSortingEnabled,
+            onCheckedChange = { viewModel.updateSourceSortingEnabled(currentProfile.id, it) },
+            onBack = onGoBack,
+            blockUp = true
+        )
+
+        if (currentProfile.sourceSortingEnabled) {
+            Spacer(Modifier.height(15.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+            Spacer(Modifier.height(15.dp))
+
+            // SORT PRIORITY
+            Text(
+                "Sort Priority",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                color = Color.White
+            )
+            Text(
+                "Choose what matters most when ranking sources.",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                color = Color.White.copy(0.6f),
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+            )
+
+            SettingOptionRow(
+                label = "Primary Sort",
+                options = listOf("Quality" to "quality", "File Size" to "size", "Seeds" to "seeds"),
+                selectedOption = currentProfile.sourceSortPrimary,
+                onOptionSelected = { viewModel.updateSourceSortPrimary(currentProfile.id, it) },
+                onBack = onGoBack
+            )
+
+            SettingOptionRow(
+                label = "Secondary Sort",
+                options = listOf("Quality" to "quality", "File Size" to "size", "Seeds" to "seeds"),
+                selectedOption = currentProfile.sourceSortSecondary,
+                onOptionSelected = { viewModel.updateSourceSortSecondary(currentProfile.id, it) },
+                onBack = onGoBack
+            )
+
+            Spacer(Modifier.height(15.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+            Spacer(Modifier.height(15.dp))
+
+            // QUALITY FILTER
+            Text(
+                "Allowed Qualities",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                color = Color.White
+            )
+            Text(
+                "Sources with disabled qualities will be hidden.",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                color = Color.White.copy(0.6f),
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+            )
+
+            val enabledKeys = remember(currentProfile.sourceEnabledQualities) {
+                currentProfile.sourceEnabledQualities.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            }
+
+            fun toggleQuality(key: String) {
+                val newKeys = if (key in enabledKeys) enabledKeys - key else enabledKeys + key
+                viewModel.updateSourceEnabledQualities(currentProfile.id, newKeys.joinToString(","))
+            }
+
+            SettingToggleRow(label = "4K / UHD", isChecked = "4k" in enabledKeys, onCheckedChange = { toggleQuality("4k") }, onBack = onGoBack)
+            SettingToggleRow(label = "1080p / FHD", isChecked = "1080p" in enabledKeys, onCheckedChange = { toggleQuality("1080p") }, onBack = onGoBack)
+            SettingToggleRow(label = "720p / HD", isChecked = "720p" in enabledKeys, onCheckedChange = { toggleQuality("720p") }, onBack = onGoBack)
+            SettingToggleRow(label = "480p / SD", isChecked = "sd" in enabledKeys, onCheckedChange = { toggleQuality("sd") }, onBack = onGoBack)
+            SettingToggleRow(label = "CAM / Telesync", isChecked = "cam" in enabledKeys, onCheckedChange = { toggleQuality("cam") }, onBack = onGoBack)
+            SettingToggleRow(label = "Unknown Quality", isChecked = "unknown" in enabledKeys, onCheckedChange = { toggleQuality("unknown") }, onBack = onGoBack)
+
+            Spacer(Modifier.height(15.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+            Spacer(Modifier.height(15.dp))
+
+            // EXCLUDE PHRASES
+            Text(
+                "Exclude Phrases",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                color = Color.White
+            )
+            Text(
+                "Sources containing these words will be hidden. Comma-separated.",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                color = Color.White.copy(0.6f),
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+            )
+
+            var excludeInput by remember(currentProfile.sourceExcludePhrases) {
+                mutableStateOf(currentProfile.sourceExcludePhrases)
+            }
+            BasicTextField(
+                value = excludeInput,
+                onValueChange = { excludeInput = it },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontSize = 14.sp),
+                cursorBrush = SolidColor(Color.White),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { viewModel.updateSourceExcludePhrases(currentProfile.id, excludeInput) }
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White.copy(0.08f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (excludeInput.isEmpty()) {
+                            Text("e.g. 3D, Sample", color = Color.White.copy(0.3f), fontSize = 14.sp)
+                        }
+                        innerTextField()
+                    }
+                }
+            )
+        }
+
+        Spacer(Modifier.height(30.dp))
     }
 }
 

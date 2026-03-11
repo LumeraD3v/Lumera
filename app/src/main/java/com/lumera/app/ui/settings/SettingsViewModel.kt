@@ -209,4 +209,18 @@ class SettingsViewModel @Inject constructor(
             if (profile != null) dao.insertProfile(profile.copy(sourceExcludePhrases = phrases))
         }
     }
+
+    fun updateSourceSortPrimary(profileId: Int, sort: String) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(sourceSortPrimary = sort))
+        }
+    }
+
+    fun updateSourceSortSecondary(profileId: Int, sort: String) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(sourceSortSecondary = sort))
+        }
+    }
 }

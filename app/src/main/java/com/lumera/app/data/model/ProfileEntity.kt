@@ -46,6 +46,8 @@ data class ProfileEntity(
     val autoSelectSource: Boolean = false,
     val rememberSourceSelection: Boolean = true,
     val sourceSortingEnabled: Boolean = true,
+    val sourceSortPrimary: String = "quality",    // "quality", "size", "seeds"
+    val sourceSortSecondary: String = "size",     // "quality", "size", "seeds"
     val sourceEnabledQualities: String = "4k,1080p,720p,unknown",
     val sourceExcludePhrases: String = "",
     val skipIntro: Boolean = true,
