@@ -65,6 +65,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.lumera.app.domain.AddonSubtitle
 import com.lumera.app.domain.episodePlaybackId
+import com.lumera.app.domain.episodeStreamId
 import com.lumera.app.domain.episodeDisplayTitle
 import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.model.stremio.Stream
@@ -313,18 +314,20 @@ fun DetailsScreen(
                             icon = Icons.Default.PlayArrow,
                             modifier = Modifier.focusRequester(firstButtonFocusRequester),
                             onClick = {
-                                val epId = resumePlaybackId ?: episodePlaybackId(id, firstEpisode ?: return@VoidActionButton)
+                                val ep = resumeEpisode ?: firstEpisode ?: return@VoidActionButton
+                                val trackId = resumePlaybackId ?: episodePlaybackId(id, ep)
+                                val streamId = episodeStreamId(id, ep)
                                 val epTitle = when {
                                     resumePlaybackId != null && resumeEpisode != null -> episodeDisplayTitle(resumeEpisode)
                                     resumePlaybackId != null && parsedResumeSeasonEpisode != null ->
                                         "S${parsedResumeSeasonEpisode.first}:E${parsedResumeSeasonEpisode.second} - ${currentMovie.name}"
                                     resumePlaybackId != null -> currentMovie.name
-                                    else -> episodeDisplayTitle(firstEpisode ?: return@VoidActionButton)
+                                    else -> episodeDisplayTitle(ep)
                                 }
-                                pendingPlaybackId = epId
+                                pendingPlaybackId = trackId
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = epTitle
-                                viewModel.loadStreams(type, epId, epTitle, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                                viewModel.loadStreams(type, streamId, epTitle, sourceSelectionId = trackId, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
                             }
                         )
 
@@ -397,12 +400,13 @@ fun DetailsScreen(
             onDismiss = { viewModel.closeSidebar() },
             onBack = { viewModel.goBackInSidebar() },
             onEpisodeSelected = { episode ->
-                val epId = episodePlaybackId(id, episode)
+                val trackId = episodePlaybackId(id, episode)
+                val streamId = episodeStreamId(id, episode)
                 val epTitle = episodeDisplayTitle(episode)
-                pendingPlaybackId = epId
+                pendingPlaybackId = trackId
                 pendingPlaybackType = type
                 pendingPlaybackTitle = epTitle
-                viewModel.loadStreams(type, epId, epTitle, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                viewModel.loadStreams(type, streamId, epTitle, sourceSelectionId = trackId, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
             },
             onSourceSelected = { stream ->
                 viewModel.closeSidebar()
@@ -526,7 +530,11 @@ private fun resolveEpisodeForPlaybackId(
 ): MetaVideo? {
     val targetId = playbackId ?: return null
     val episodeList = videos ?: return null
-    return episodeList.firstOrNull { episodePlaybackId(seriesId, it) == targetId }
+    // Exact match (new format: seriesId:season:episode)
+    episodeList.firstOrNull { episodePlaybackId(seriesId, it) == targetId }?.let { return it }
+    // Fallback: match by season/episode numbers (handles old-format entries)
+    val parsed = parseSeasonEpisodeFromPlaybackId(targetId) ?: return null
+    return episodeList.firstOrNull { it.season == parsed.first && it.episode == parsed.second }
 }
 
 private fun parseSeasonEpisodeFromPlaybackId(playbackId: String?): Pair<Int, Int>? {

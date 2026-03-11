@@ -68,6 +68,7 @@ import com.lumera.app.domain.AddonSubtitle
 import com.lumera.app.domain.DashboardTab
 import com.lumera.app.domain.episodeDisplayTitle
 import com.lumera.app.domain.episodePlaybackId
+import com.lumera.app.domain.episodeStreamId
 import com.lumera.app.domain.findNextEpisode
 import com.lumera.app.ui.navigation.NavDestination
 import com.lumera.app.ui.navigation.NavDrawer
@@ -1570,6 +1571,7 @@ class MainActivity : ComponentActivity() {
                                         )
 
                                         val nextPlaybackId = episodePlaybackId(selectedMovieId, nextEpisode)
+                                        val nextStreamId = episodeStreamId(selectedMovieId, nextEpisode)
                                         val nextPlaybackTitle = episodeDisplayTitle(nextEpisode)
 
                                         uiScope.launch {
@@ -1590,8 +1592,8 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }
 
-                                            val streamsDeferred = async { try { addonRepository.getStreams("series", nextPlaybackId) } catch (_: Exception) { emptyList() } }
-                                            val subtitlesDeferred = async { try { subtitleRepository.getSubtitles("series", nextPlaybackId) } catch (_: Exception) { emptyList() } }
+                                            val streamsDeferred = async { try { addonRepository.getStreams("series", nextStreamId) } catch (_: Exception) { emptyList() } }
+                                            val subtitlesDeferred = async { try { subtitleRepository.getSubtitles("series", nextStreamId) } catch (_: Exception) { emptyList() } }
 
                                             val rawStreams = streamsDeferred.await()
                                             val addonSubs = subtitlesDeferred.await()
@@ -1722,6 +1724,7 @@ class MainActivity : ComponentActivity() {
                                 onEpisodeSelected = if (playerState.currentEpisodeList.isNotEmpty()) {
                                     { episode, playerCurrentSourceUrl ->
                                         val epPlaybackId = episodePlaybackId(selectedMovieId, episode)
+                                        val epStreamId = episodeStreamId(selectedMovieId, episode)
                                         val epTitle = episodeDisplayTitle(episode)
 
                                         uiScope.launch {
@@ -1742,8 +1745,8 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }
 
-                                            val streamsDeferred = async { try { addonRepository.getStreams("series", epPlaybackId) } catch (_: Exception) { emptyList() } }
-                                            val subtitlesDeferred = async { try { subtitleRepository.getSubtitles("series", epPlaybackId) } catch (_: Exception) { emptyList() } }
+                                            val streamsDeferred = async { try { addonRepository.getStreams("series", epStreamId) } catch (_: Exception) { emptyList() } }
+                                            val subtitlesDeferred = async { try { subtitleRepository.getSubtitles("series", epStreamId) } catch (_: Exception) { emptyList() } }
 
                                             val rawStreams2 = streamsDeferred.await()
                                             val addonSubs = subtitlesDeferred.await()

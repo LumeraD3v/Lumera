@@ -169,6 +169,7 @@ class DetailsViewModel @Inject constructor(
         type: String,
         id: String,
         displayTitle: String,
+        sourceSelectionId: String = id,
         forceSourcePicker: Boolean = false,
         autoSelectSource: Boolean = false,
         rememberSourceSelection: Boolean = true
@@ -178,7 +179,7 @@ class DetailsViewModel @Inject constructor(
             // Show immediate loading feedback:
             // - Show sources sidebar when user needs to pick manually
             // - Centered spinner when auto-resolve is expected (auto-select or remembered source)
-            val hasRemembered = rememberSourceSelection && sourceSelectionStore.hasRememberedSelection(id)
+            val hasRemembered = rememberSourceSelection && sourceSelectionStore.hasRememberedSelection(sourceSelectionId)
             val showSidebar = forceSourcePicker || (!autoSelectSource && !hasRemembered)
 
             _state.value = _state.value.copy(
@@ -213,7 +214,7 @@ class DetailsViewModel @Inject constructor(
                 val preferredStream = if (forceSourcePicker || !rememberSourceSelection) {
                     null
                 } else {
-                    sourceSelectionStore.findPreferredStream(id, streams)
+                    sourceSelectionStore.findPreferredStream(sourceSelectionId, streams)
                 }
 
                 if (preferredStream != null) {
