@@ -171,12 +171,7 @@ class DetailsViewModel @Inject constructor(
         displayTitle: String,
         forceSourcePicker: Boolean = false,
         autoSelectSource: Boolean = false,
-        rememberSourceSelection: Boolean = true,
-        sourceSortingEnabled: Boolean = true,
-        sourceSortPrimary: String = "quality",
-        sourceSortSecondary: String = "size",
-        sourceEnabledQualities: String = "4k,1080p,720p,unknown",
-        sourceExcludePhrases: String = ""
+        rememberSourceSelection: Boolean = true
     ) {
         loadStreamsJob?.cancel()
         loadStreamsJob = viewModelScope.launch {
@@ -202,12 +197,16 @@ class DetailsViewModel @Inject constructor(
                 val rawStreams = streamsDeferred.await()
                 val addonSubtitles = subtitlesDeferred.await()
 
-                val streams = if (sourceSortingEnabled) {
-                    val enabledQualities = StreamSortingService.parseEnabledQualities(sourceEnabledQualities)
-                    val excludePhrases = StreamSortingService.parseExcludePhrases(sourceExcludePhrases)
+                // Read sorting preferences from the active profile
+                val activeProfileId = profileConfigurationManager.getLastActiveProfileId()
+                val profile = activeProfileId?.let { dao.getProfileById(it) }
+
+                val streams = if (profile?.sourceSortingEnabled != false) {
+                    val enabledQualities = StreamSortingService.parseEnabledQualities(profile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
+                    val excludePhrases = StreamSortingService.parseExcludePhrases(profile?.sourceExcludePhrases ?: "")
                     val addonSortOrders = dao.getAllAddons().firstOrNull()
                         ?.associate { it.transportUrl to it.sortOrder } ?: emptyMap()
-                    streamSortingService.sortAndFilter(rawStreams, enabledQualities, excludePhrases, addonSortOrders, sourceSortPrimary, sourceSortSecondary)
+                    streamSortingService.sortAndFilter(rawStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceSortSecondary ?: "size")
                 } else rawStreams
 
                 val preferredStream = if (forceSourcePicker || !rememberSourceSelection) {

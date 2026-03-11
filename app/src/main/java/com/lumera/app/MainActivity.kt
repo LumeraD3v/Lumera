@@ -1372,11 +1372,6 @@ class MainActivity : ComponentActivity() {
                                 resumePlaybackHint = detailsResumePlaybackHint,
                                 autoSelectSource = currentProfile?.autoSelectSource ?: false,
                                 rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
-                                sourceSortingEnabled = currentProfile?.sourceSortingEnabled ?: true,
-                                sourceSortPrimary = currentProfile?.sourceSortPrimary ?: "quality",
-                                sourceSortSecondary = currentProfile?.sourceSortSecondary ?: "size",
-                                sourceEnabledQualities = currentProfile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown",
-                                sourceExcludePhrases = currentProfile?.sourceExcludePhrases ?: "",
                                 onPlayClick = { url, playbackId, playbackType, playbackTitle, seriesTitle, logo, stream, addonSubtitles, availableStreams, episodes ->
                                     val resolvedPlaybackTitle = playbackTitle.ifBlank { selectedMovieTitle }
                                     val resolvedSeriesTitle = seriesTitle.ifBlank { selectedMovieTitle }
