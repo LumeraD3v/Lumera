@@ -217,10 +217,17 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun updateSourceSortSecondary(profileId: Int, sort: String) {
+    fun updateSourceMaxSizeGb(profileId: Int, sizeGb: Int) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             val profile = dao.getProfileById(profileId)
-            if (profile != null) dao.insertProfile(profile.copy(sourceSortSecondary = sort))
+            if (profile != null) dao.insertProfile(profile.copy(sourceMaxSizeGb = sizeGb))
+        }
+    }
+
+    fun updateSourceExcludedFormats(profileId: Int, formats: String) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
+            val profile = dao.getProfileById(profileId)
+            if (profile != null) dao.insertProfile(profile.copy(sourceExcludedFormats = formats))
         }
     }
 }

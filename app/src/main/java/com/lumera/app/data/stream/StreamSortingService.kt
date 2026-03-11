@@ -13,39 +13,47 @@ class StreamSortingService @Inject constructor() {
         enabledQualities: Set<StreamQuality>,
         excludePhrases: List<String>,
         addonSortOrders: Map<String, Int>,
-        primarySort: String = "quality",
-        secondarySort: String = "size"
+        sortBy: String = "quality",
+        maxSizeGb: Int = 0,
+        excludedFormats: Set<String> = emptySet()
     ): List<Stream> {
         val lowerPhrases = excludePhrases
             .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
 
+        val maxSizeBytes = if (maxSizeGb > 0) maxSizeGb.toLong() * 1_073_741_824L else Long.MAX_VALUE
+
         return streams
-            .filter { stream ->
-                val info = StreamParser.parse(stream)
-                info.quality in enabledQualities
-            }
-            .filter { stream ->
+            .map { stream -> stream to StreamParser.parse(stream) }
+            .filter { (_, info) -> info.quality in enabledQualities }
+            .filter { (stream, _) ->
                 if (lowerPhrases.isEmpty()) return@filter true
                 val text = StreamParser.combinedText(stream).lowercase()
                 lowerPhrases.none { phrase -> text.contains(phrase) }
             }
-            .sortedWith(buildComparator(addonSortOrders, primarySort, secondarySort))
+            .filter { (_, info) ->
+                if (maxSizeGb <= 0) return@filter true
+                val sizeBytes = info.sizeBytes ?: return@filter true
+                sizeBytes <= maxSizeBytes
+            }
+            .filter { (_, info) ->
+                if (excludedFormats.isEmpty()) return@filter true
+                excludedFormats.intersect(info.formats).isEmpty()
+            }
+            .map { (stream, _) -> stream }
+            .sortedWith(buildComparator(addonSortOrders, sortBy))
     }
 
     private fun buildComparator(
         addonSortOrders: Map<String, Int>,
-        primarySort: String,
-        secondarySort: String
+        sortBy: String
     ): Comparator<Stream> {
-        // Determine tertiary: whichever of quality/size/seeds isn't primary or secondary
-        val allSorts = listOf("quality", "size", "seeds")
-        val tertiary = allSorts.firstOrNull { it != primarySort && it != secondarySort } ?: "seeds"
-
-        var comparator = sortComparatorFor(primarySort)
-        comparator = comparator.then(sortComparatorFor(secondarySort))
-        comparator = comparator.then(sortComparatorFor(tertiary))
-        // Final tiebreaker: addon priority
+        // Sort chain: chosen primary → other → seeds → addon priority
+        var comparator = when (sortBy) {
+            "size" -> sortComparatorFor("size").then(sortComparatorFor("quality"))
+            else -> sortComparatorFor("quality").then(sortComparatorFor("size"))
+        }
+        comparator = comparator.then(sortComparatorFor("seeds"))
         comparator = comparator.thenBy { addonSortOrders[it.addonTransportUrl] ?: Int.MAX_VALUE }
         return comparator
     }
@@ -70,6 +78,11 @@ class StreamSortingService @Inject constructor() {
         fun parseExcludePhrases(phrasesString: String): List<String> {
             if (phrasesString.isBlank()) return emptyList()
             return phrasesString.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+
+        fun parseExcludedFormats(formatsString: String): Set<String> {
+            if (formatsString.isBlank()) return emptySet()
+            return formatsString.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         }
     }
 }

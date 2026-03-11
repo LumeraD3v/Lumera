@@ -1,5 +1,9 @@
 package com.lumera.app.ui.settings
 
+import com.lumera.app.ui.addons.VoidDialog
+import com.lumera.app.ui.details.FilterDropdown
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -21,7 +25,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -658,6 +666,75 @@ fun SettingToggleRow(
         )
     }
     Spacer(Modifier.height(6.dp))
+}
+
+@Composable
+fun SettingToggleChip(
+    label: String,
+    isChecked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onBack: (() -> Unit)? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
+    val borderColor by animateColorAsState(
+        when {
+            isFocused -> Color.White
+            isChecked -> accentColor.copy(0.5f)
+            else -> Color.White.copy(0.15f)
+        }
+    )
+
+    val backModifier = if (onBack != null) {
+        Modifier.onPreviewKeyEvent {
+            if (it.key == Key.DirectionLeft && it.type == KeyEventType.KeyDown) {
+                onBack(); true
+            } else false
+        }
+    } else Modifier
+
+    Row(
+        modifier = Modifier
+            .then(backModifier)
+            .scale(scale)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isChecked) accentColor.copy(0.15f) else Color.White.copy(0.05f))
+            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .clickable(interactionSource = interactionSource, indication = null) {
+                onCheckedChange(!isChecked)
+            }
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = if (isChecked) Icons.Default.Check else Icons.Default.Close,
+            contentDescription = null,
+            tint = when {
+                isChecked -> accentColor
+                isFocused -> Color.White.copy(0.7f)
+                else -> Color.White.copy(0.3f)
+            },
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = label,
+            color = when {
+                isChecked -> accentColor
+                isFocused -> Color.White
+                else -> Color.White.copy(0.8f)
+            },
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp
+            ),
+            maxLines = 1
+        )
+    }
 }
 
 @Composable
@@ -1524,9 +1601,9 @@ fun SourcePreferencesSettings(
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
             Spacer(Modifier.height(15.dp))
 
-            // SORT PRIORITY
+            // SORT BY
             Text(
-                "Sort Priority",
+                "Sort By",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
                 color = Color.White
             )
@@ -1538,18 +1615,10 @@ fun SourcePreferencesSettings(
             )
 
             SettingOptionRow(
-                label = "Primary Sort",
-                options = listOf("Quality" to "quality", "File Size" to "size", "Seeds" to "seeds"),
+                label = "Sort By",
+                options = listOf("Quality" to "quality", "File Size" to "size"),
                 selectedOption = currentProfile.sourceSortPrimary,
                 onOptionSelected = { viewModel.updateSourceSortPrimary(currentProfile.id, it) },
-                onBack = onGoBack
-            )
-
-            SettingOptionRow(
-                label = "Secondary Sort",
-                options = listOf("Quality" to "quality", "File Size" to "size", "Seeds" to "seeds"),
-                selectedOption = currentProfile.sourceSortSecondary,
-                onOptionSelected = { viewModel.updateSourceSortSecondary(currentProfile.id, it) },
                 onBack = onGoBack
             )
 
@@ -1579,56 +1648,183 @@ fun SourcePreferencesSettings(
                 viewModel.updateSourceEnabledQualities(currentProfile.id, newKeys.joinToString(","))
             }
 
-            SettingToggleRow(label = "4K / UHD", isChecked = "4k" in enabledKeys, onCheckedChange = { toggleQuality("4k") }, onBack = onGoBack)
-            SettingToggleRow(label = "1080p / FHD", isChecked = "1080p" in enabledKeys, onCheckedChange = { toggleQuality("1080p") }, onBack = onGoBack)
-            SettingToggleRow(label = "720p / HD", isChecked = "720p" in enabledKeys, onCheckedChange = { toggleQuality("720p") }, onBack = onGoBack)
-            SettingToggleRow(label = "480p / SD", isChecked = "sd" in enabledKeys, onCheckedChange = { toggleQuality("sd") }, onBack = onGoBack)
-            SettingToggleRow(label = "CAM / Telesync", isChecked = "cam" in enabledKeys, onCheckedChange = { toggleQuality("cam") }, onBack = onGoBack)
-            SettingToggleRow(label = "Unknown Quality", isChecked = "unknown" in enabledKeys, onCheckedChange = { toggleQuality("unknown") }, onBack = onGoBack)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SettingToggleChip(label = "4K / UHD", isChecked = "4k" in enabledKeys, onCheckedChange = { toggleQuality("4k") }, onBack = onGoBack)
+                SettingToggleChip(label = "1080p", isChecked = "1080p" in enabledKeys, onCheckedChange = { toggleQuality("1080p") })
+                SettingToggleChip(label = "720p", isChecked = "720p" in enabledKeys, onCheckedChange = { toggleQuality("720p") })
+                SettingToggleChip(label = "480p / SD", isChecked = "sd" in enabledKeys, onCheckedChange = { toggleQuality("sd") })
+                SettingToggleChip(label = "CAM", isChecked = "cam" in enabledKeys, onCheckedChange = { toggleQuality("cam") })
+                SettingToggleChip(label = "Unknown", isChecked = "unknown" in enabledKeys, onCheckedChange = { toggleQuality("unknown") }, onBack = onGoBack)
+            }
+
+            Spacer(Modifier.height(15.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+            Spacer(Modifier.height(15.dp))
+
+            // MAX FILE SIZE
+            val sizeOptions = listOf("No Limit") + (listOf(2, 5) + (10..100 step 5).toList()).map { "$it GB" }
+            val currentSizeLabel = if (currentProfile.sourceMaxSizeGb == 0) "No Limit" else "${currentProfile.sourceMaxSizeGb} GB"
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Max File Size",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                    color = Color.White,
+                    modifier = Modifier.weight(1f)
+                )
+                FilterDropdown(
+                    currentValue = currentSizeLabel,
+                    options = sizeOptions,
+                    modifier = Modifier.width(160.dp),
+                    onSelect = { selected ->
+                        val gb = if (selected == "No Limit") 0 else selected.replace(" GB", "").toIntOrNull() ?: 0
+                        viewModel.updateSourceMaxSizeGb(currentProfile.id, gb)
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(15.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+            Spacer(Modifier.height(15.dp))
+
+            // EXCLUDE FORMATS
+            Text(
+                "Exclude Formats",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+                color = Color.White
+            )
+            Text(
+                "Hide sources with these codecs and formats.",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                color = Color.White.copy(0.6f),
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+            )
+
+            val excludedFormats = remember(currentProfile.sourceExcludedFormats) {
+                currentProfile.sourceExcludedFormats.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            }
+
+            fun toggleFormat(key: String) {
+                val newFormats = if (key in excludedFormats) excludedFormats - key else excludedFormats + key
+                viewModel.updateSourceExcludedFormats(currentProfile.id, newFormats.joinToString(","))
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SettingToggleChip(label = "Dolby Vision", isChecked = "dv" in excludedFormats, onCheckedChange = { toggleFormat("dv") }, onBack = onGoBack)
+                SettingToggleChip(label = "HDR / HDR10+", isChecked = "hdr" in excludedFormats, onCheckedChange = { toggleFormat("hdr") })
+                SettingToggleChip(label = "DTS", isChecked = "dts" in excludedFormats, onCheckedChange = { toggleFormat("dts") })
+                SettingToggleChip(label = "Dolby / Atmos", isChecked = "dolby" in excludedFormats, onCheckedChange = { toggleFormat("dolby") })
+                SettingToggleChip(label = "HEVC / H.265", isChecked = "hevc" in excludedFormats, onCheckedChange = { toggleFormat("hevc") }, onBack = onGoBack)
+                SettingToggleChip(label = "AV1", isChecked = "av1" in excludedFormats, onCheckedChange = { toggleFormat("av1") })
+                SettingToggleChip(label = "3D", isChecked = "3d" in excludedFormats, onCheckedChange = { toggleFormat("3d") })
+            }
 
             Spacer(Modifier.height(15.dp))
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
             Spacer(Modifier.height(15.dp))
 
             // EXCLUDE PHRASES
-            Text(
-                "Exclude Phrases",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-                color = Color.White
-            )
-            Text(
-                "Sources containing these words will be hidden. Comma-separated.",
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
-                color = Color.White.copy(0.6f),
-                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
-            )
+            var showExcludeDialog by remember { mutableStateOf(false) }
+            val currentPhrases = currentProfile.sourceExcludePhrases
+            val displayPhrases = if (currentPhrases.isBlank()) "None" else currentPhrases
 
-            var excludeInput by remember(currentProfile.sourceExcludePhrases) {
-                mutableStateOf(currentProfile.sourceExcludePhrases)
-            }
-            BasicTextField(
-                value = excludeInput,
-                onValueChange = { excludeInput = it },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontSize = 14.sp),
-                cursorBrush = SolidColor(Color.White),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(
-                    onDone = { viewModel.updateSourceExcludePhrases(currentProfile.id, excludeInput) }
-                ),
+            val interactionSource = remember { MutableInteractionSource() }
+            val isFocused by interactionSource.collectIsFocusedAsState()
+            val accentColor = MaterialTheme.colorScheme.primary
+
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White.copy(0.08f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (excludeInput.isEmpty()) {
-                            Text("e.g. 3D, Sample", color = Color.White.copy(0.3f), fontSize = 14.sp)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(0.05f))
+                    .border(
+                        if (isFocused) 2.dp else 0.dp,
+                        if (isFocused) accentColor else Color.Transparent,
+                        RoundedCornerShape(8.dp)
+                    )
+                    .clickable(interactionSource = interactionSource, indication = null) { showExcludeDialog = true }
+                    .focusable(interactionSource = interactionSource)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Exclude Phrases",
+                    color = Color.White.copy(0.8f),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp),
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    displayPhrases,
+                    color = if (currentPhrases.isBlank()) Color.White.copy(0.3f) else accentColor,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 200.dp)
+                )
+            }
+
+            if (showExcludeDialog) {
+                var dialogInput by remember { mutableStateOf(currentPhrases) }
+                val focusRequester = remember { FocusRequester() }
+
+                VoidDialog(
+                    onDismissRequest = {
+                        viewModel.updateSourceExcludePhrases(currentProfile.id, dialogInput)
+                        showExcludeDialog = false
+                    },
+                    title = "Exclude Phrases"
+                ) {
+                    Text(
+                        "Sources containing these words will be hidden. Comma-separated.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(0.6f),
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    BasicTextField(
+                        value = dialogInput,
+                        onValueChange = { dialogInput = it },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontSize = 14.sp),
+                        cursorBrush = SolidColor(Color.White),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                viewModel.updateSourceExcludePhrases(currentProfile.id, dialogInput)
+                                showExcludeDialog = false
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(0.08f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 12.dp)
+                            .focusRequester(focusRequester),
+                        decorationBox = { innerTextField ->
+                            Box {
+                                if (dialogInput.isEmpty()) {
+                                    Text("e.g. sample, remux, cam", color = Color.White.copy(0.3f), fontSize = 14.sp)
+                                }
+                                innerTextField()
+                            }
                         }
-                        innerTextField()
+                    )
+
+                    LaunchedEffect(Unit) {
+                        delay(100)
+                        focusRequester.requestFocus()
                     }
                 }
-            )
+            }
         }
 
         Spacer(Modifier.height(30.dp))

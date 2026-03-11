@@ -50,6 +50,8 @@ data class ProfileEntity(
     val sourceSortSecondary: String = "size",     // "quality", "size", "seeds"
     val sourceEnabledQualities: String = "4k,1080p,720p,unknown",
     val sourceExcludePhrases: String = "",
+    val sourceMaxSizeGb: Int = 0,                // 0 = no limit
+    val sourceExcludedFormats: String = "",       // comma-separated: "dv,hdr,dts,dolby,hevc,av1,3d"
     val skipIntro: Boolean = true,
 
     val preferredAudioLanguage: String = "",

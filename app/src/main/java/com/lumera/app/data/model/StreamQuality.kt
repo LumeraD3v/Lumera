@@ -9,21 +9,32 @@ enum class StreamQuality(val sortOrder: Int) {
     UNKNOWN(0);
 
     companion object {
-        private val pattern4K = Regex("""(?i)\b(2160p|4k|uhd)\b""")
-        private val pattern1080 = Regex("""(?i)\b(1080p|fhd)\b""")
-        private val pattern720 = Regex("""(?i)\b720p\b""")
-        private val patternHD = Regex("""(?i)\bHD\b""")
-        private val patternSD = Regex("""(?i)\b(480p|sd|dvd|dvdrip)\b""")
+        // Explicit resolution numbers — highest priority
+        private val explicit2160 = Regex("""(?i)\b2160[pi]?\b""")
+        private val explicit1080 = Regex("""(?i)\b1080[pi]?\b""")
+        private val explicit720 = Regex("""(?i)\b720[pi]?\b""")
+        private val explicit480 = Regex("""(?i)\b480[pi]?\b""")
+
+        // Ambiguous terms — lower priority, only used if no explicit number found
+        private val fuzzy4K = Regex("""(?i)\b(4k|uhd|ultra\s*hd)\b""")
+        private val fuzzy1080 = Regex("""(?i)\bfhd\b""")
+        private val fuzzyHD = Regex("""(?i)\bHD\b""")
+        private val fuzzySD = Regex("""(?i)\b(sd|dvd|dvdrip)\b""")
         private val patternCAM = Regex("""(?i)\b(cam|camrip|ts|telesync|hdts|hdcam|telecine|tc)\b""")
 
         fun fromString(input: String): StreamQuality {
+            // Pass 1: Explicit resolution numbers always win
             return when {
-                pattern4K.containsMatchIn(input) -> UHD_4K
-                pattern1080.containsMatchIn(input) -> FHD_1080P
-                pattern720.containsMatchIn(input) -> HD_720P
-                patternSD.containsMatchIn(input) -> SD_480P
+                explicit2160.containsMatchIn(input) -> UHD_4K
+                explicit1080.containsMatchIn(input) -> FHD_1080P
+                explicit720.containsMatchIn(input) -> HD_720P
+                explicit480.containsMatchIn(input) -> SD_480P
+                // Pass 2: Ambiguous/fuzzy terms (only if no explicit resolution found)
+                fuzzy4K.containsMatchIn(input) -> UHD_4K
+                fuzzy1080.containsMatchIn(input) -> FHD_1080P
                 patternCAM.containsMatchIn(input) -> CAM
-                patternHD.containsMatchIn(input) -> HD_720P
+                fuzzySD.containsMatchIn(input) -> SD_480P
+                fuzzyHD.containsMatchIn(input) -> HD_720P
                 else -> UNKNOWN
             }
         }

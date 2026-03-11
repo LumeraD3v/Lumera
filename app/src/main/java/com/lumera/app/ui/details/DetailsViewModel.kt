@@ -206,7 +206,8 @@ class DetailsViewModel @Inject constructor(
                     val excludePhrases = StreamSortingService.parseExcludePhrases(profile?.sourceExcludePhrases ?: "")
                     val addonSortOrders = dao.getAllAddons().firstOrNull()
                         ?.associate { it.transportUrl to it.sortOrder } ?: emptyMap()
-                    streamSortingService.sortAndFilter(rawStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceSortSecondary ?: "size")
+                    val excludedFormats = StreamSortingService.parseExcludedFormats(profile?.sourceExcludedFormats ?: "")
+                    streamSortingService.sortAndFilter(rawStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceMaxSizeGb ?: 0, excludedFormats)
                 } else rawStreams
 
                 val preferredStream = if (forceSourcePicker || !rememberSourceSelection) {
