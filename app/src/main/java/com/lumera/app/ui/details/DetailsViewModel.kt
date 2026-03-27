@@ -58,6 +58,12 @@ class DetailsViewModel @Inject constructor(
     private var loadRequestVersion: Long = 0L
     private var loadedContentKey: String? = null
 
+    // Prefetched streams cache
+    private var prefetchStreamsJob: Job? = null
+    private var prefetchedStreamKey: String? = null
+    private var prefetchedStreams: List<Stream>? = null
+    private var prefetchedSubtitles: List<AddonSubtitle>? = null
+
     // Stash for undo: holds deleted history entries until the user leaves the screen
     private var clearedHistoryStash: List<WatchHistoryEntity> = emptyList()
     private var clearedResumeId: String? = null
@@ -115,6 +121,10 @@ class DetailsViewModel @Inject constructor(
                     addonSubtitles = emptyList(),
                     availableStreams = emptyList()
                 )
+
+                // Start fetching streams in the background so they're ready when the user hits Play
+                val prefetchId = resumePlaybackId ?: streamFetchId
+                prefetchStreams(details.type, prefetchId)
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -170,6 +180,24 @@ class DetailsViewModel @Inject constructor(
         )
     }
 
+    private fun prefetchStreams(type: String, id: String) {
+        prefetchStreamsJob?.cancel()
+        val key = "$type:$id"
+        prefetchedStreamKey = key
+        prefetchedStreams = null
+        prefetchedSubtitles = null
+        prefetchStreamsJob = viewModelScope.launch {
+            try {
+                val streamsDeferred = async { repository.getStreams(type, id) }
+                val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                prefetchedStreams = streamsDeferred.await()
+                prefetchedSubtitles = subtitlesDeferred.await()
+            } catch (_: Exception) {
+                // Prefetch failed silently — loadStreams will fetch fresh
+            }
+        }
+    }
+
     // 2. Open Sources (Movie OR Specific Episode)
     fun loadStreams(
         type: String,
@@ -198,11 +226,29 @@ class DetailsViewModel @Inject constructor(
             )
 
             try {
-                val streamsDeferred = async { repository.getStreams(type, id) }
-                val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                // Use prefetched results if available, otherwise fetch fresh
+                val rawStreams: List<Stream>
+                val addonSubtitles: List<AddonSubtitle>
+                val prefetchKey = "$type:$id"
 
-                val rawStreams = streamsDeferred.await()
-                val addonSubtitles = subtitlesDeferred.await()
+                if (prefetchedStreamKey == prefetchKey) {
+                    prefetchStreamsJob?.join()
+                    if (prefetchedStreams != null) {
+                        rawStreams = prefetchedStreams!!
+                        addonSubtitles = prefetchedSubtitles ?: emptyList()
+                    } else {
+                        // Prefetch failed — fetch fresh
+                        val streamsDeferred = async { repository.getStreams(type, id) }
+                        val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                        rawStreams = streamsDeferred.await()
+                        addonSubtitles = subtitlesDeferred.await()
+                    }
+                } else {
+                    val streamsDeferred = async { repository.getStreams(type, id) }
+                    val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
+                    rawStreams = streamsDeferred.await()
+                    addonSubtitles = subtitlesDeferred.await()
+                }
 
                 // Read sorting preferences from the active profile
                 val activeProfileId = profileConfigurationManager.getLastActiveProfileId()
