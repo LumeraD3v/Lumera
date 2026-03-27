@@ -13,6 +13,7 @@ import com.lumera.app.data.repository.AddonRepository
 import com.lumera.app.data.repository.SubtitleRepository
 import com.lumera.app.data.stream.StreamSortingService
 import com.lumera.app.domain.AddonSubtitle
+import com.lumera.app.domain.episodeStreamId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lumera.app.data.model.WatchHistoryEntity
 import kotlinx.coroutines.flow.firstOrNull
@@ -123,7 +124,17 @@ class DetailsViewModel @Inject constructor(
                 )
 
                 // Start fetching streams in the background so they're ready when the user hits Play
-                val prefetchId = resumePlaybackId ?: streamFetchId
+                val prefetchId = if (resumePlaybackId != null) {
+                    resumePlaybackId
+                } else if (details.type == "series") {
+                    // Prefetch the first episode — matches what the Play button will request
+                    val firstEpisode = details.videos
+                        ?.filter { it.season > 0 && it.episode > 0 }
+                        ?.minWithOrNull(compareBy<com.lumera.app.data.model.stremio.MetaVideo> { it.season }.thenBy { it.episode })
+                    firstEpisode?.let { episodeStreamId(streamFetchId, it) } ?: streamFetchId
+                } else {
+                    streamFetchId
+                }
                 prefetchStreams(details.type, prefetchId)
             } catch (ce: CancellationException) {
                 throw ce
