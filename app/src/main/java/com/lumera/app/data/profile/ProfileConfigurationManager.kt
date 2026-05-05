@@ -13,6 +13,7 @@ import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.stremio.CatalogManifest
 import com.lumera.app.data.repository.AddonRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import java.io.File
 import javax.inject.Inject
@@ -49,6 +50,8 @@ class ProfileConfigurationManager @Inject constructor(
 
     private var startupRuntimeCaptured = false
 
+    fun resetStartupCapture() { startupRuntimeCaptured = false }
+
     fun markPendingSetup(profileId: Int) {
         val updated = getPendingSetupIds().toMutableSet().apply { add(profileId.toString()) }
         prefs.edit().putStringSet(KEY_PENDING_SETUP_PROFILES, updated).apply()
@@ -65,6 +68,7 @@ class ProfileConfigurationManager @Inject constructor(
 
     suspend fun captureStartupRuntimeIfNeeded() {
         if (startupRuntimeCaptured) return
+        delay(500L)
         startupRuntimeCaptured = true
 
         val lastActive = getLastActiveProfileId() ?: return
