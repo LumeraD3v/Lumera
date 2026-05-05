@@ -399,6 +399,10 @@ fun BasePlayerScaffold(
             }
             panelOpen -> closePanel()
             showControls -> {
+                if (uiState.isEnded && nextEpisodeInfo == null) {
+                    onBack()
+                    return
+                }
                 markInteraction()
                 showControls = false
                 showSeekOverlay = false
