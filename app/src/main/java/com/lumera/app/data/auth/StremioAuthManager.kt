@@ -74,15 +74,15 @@ class StremioAuthManager @Inject constructor(
     }
 
     private fun clearCorruptedPrefs() {
-        // Delete the corrupted prefs file
-        val prefsFile = File(context.filesDir.parent, "shared_prefs/$PREFS_FILE.xml")
-        prefsFile.delete()
+        val prefsDir = "shared_prefs"
+        File(context.filesDir.parent, "$prefsDir/$PREFS_FILE.xml").delete()
+        File(context.filesDir.parent, "$prefsDir/$PREFS_FILE.xml.bak").delete()
 
-        // Remove the master key from Android KeyStore
         try {
             val keyStore = KeyStore.getInstance("AndroidKeyStore")
             keyStore.load(null)
             keyStore.deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+            keyStore.deleteEntry("_androidx_security_master_key")
         } catch (e: Exception) {
             Log.e("StremioAuthManager", "Failed to clear master key", e)
         }
