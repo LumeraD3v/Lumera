@@ -96,6 +96,7 @@ class AddonsViewModel @Inject constructor(
             try {
                 repository.installAddonWithConfig(url, home, movies, series)
                 persistProfileState()
+                profileConfigurationManager.resetStartupCapture()
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 _events.send(AddonEvent.InstallationSuccess)
             } catch (e: Exception) {

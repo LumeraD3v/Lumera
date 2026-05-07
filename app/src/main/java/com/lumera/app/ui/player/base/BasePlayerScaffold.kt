@@ -399,6 +399,10 @@ fun BasePlayerScaffold(
             }
             panelOpen -> closePanel()
             showControls -> {
+                if (uiState.isEnded && nextEpisodeInfo == null) {
+                    onBack()
+                    return
+                }
                 markInteraction()
                 showControls = false
                 showSeekOverlay = false
@@ -777,7 +781,6 @@ fun BasePlayerScaffold(
             currentPlaybackId = currentPlaybackId,
             onClose = { closePanel() },
             onEpisodeSelected = { episode ->
-                closePanel()
                 onEpisodeSelected?.invoke(episode, currentSourceUrl)
             }
         )

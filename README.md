@@ -1,11 +1,11 @@
-# Lumera
+# Lumerio
 
 A feature-rich Android TV streaming application built with Kotlin and Jetpack Compose for TV.
 
 Browse, discover, and stream content from Stremio-compatible addons.
 Connect your Stremio account to instantly import your existing addon collection.
 
-![Lumera](screenshots/banner.png)
+![Lumerio](screenshots/lumerio_logo.svg)
 
 ## Screenshots
 
@@ -134,7 +134,7 @@ Lumera/
 
 ## Disclaimer
 
-Lumera is a media client that connects to third-party addons. It does not host, distribute, or provide any copyrighted content. Users are solely responsible for the addons they install and the content they access. This software is intended for streaming media you legally own or have the right to view. The developers do not condone piracy in any form.
+Lumerio is a Lumera3d fork, a media client that connects to third-party addons. It does not host, distribute, or provide any copyrighted content. Users are solely responsible for the addons they install and the content they access. This software is intended for streaming media you legally own or have the right to view. The developers do not condone piracy in any form.
 
 ## License
 
